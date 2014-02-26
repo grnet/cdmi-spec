@@ -39,6 +39,6 @@ package gr.grnet.cdmi.model
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-class CdmiContainer {
+class CdmiQueueModel {
 
 }

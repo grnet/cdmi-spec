@@ -33,16 +33,42 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
+package gr.grnet.cdmi.server
 
-import gr.grnet.cdmi.model.CdmiContainerModel
-import scala.concurrent.Future
+import com.twitter.finagle.http.{Request, Response}
+import com.twitter.finagle.{Filter, Http, Service}
+import com.twitter.server.TwitterServer
+import com.twitter.util.{Await, Future}
+import gr.grnet.cdmi.service.CdmiService
+import java.net.InetSocketAddress
+import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
+import org.jboss.netty.handler.codec.http.{HttpResponseStatus, DefaultHttpResponse, HttpResponse, HttpRequest}
+import org.jboss.netty.util.CharsetUtil.UTF_8
+
 
 /**
- * API for container objects.
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi {
-  def getRootContainers(): Future[List[String]]
+object CdmiProxyServer extends CdmiService with TwitterServer {
+  val cdmiHttpPortFlag = flag("http.port", new InetSocketAddress(defaultCdmiHttpPort), "CDMI http server port")
+
+  val rootService = new Service[Request, Response] {
+    override def apply(request: Request): Future[Response] = {
+      val response = new DefaultHttpResponse(request.getProtocolVersion(), HttpResponseStatus.OK)
+      response.setContent(copiedBuffer("hello", UTF_8))
+      Future.value(Response(response))
+    }
+  }
+
+  final val nettyToFinagle =
+    Filter.mk[HttpRequest, HttpResponse, Request, Response] { (req, service) =>
+      service(Request(req)) map { _.httpResponse }
+    }
+
+  def main() {
+    val server = Http.serve(cdmiHttpPortFlag(), nettyToFinagle andThen router)
+
+    Await.ready(server)
+  }
 }

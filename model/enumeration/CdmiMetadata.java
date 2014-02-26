@@ -33,7 +33,7 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.model;
+package gr.grnet.cdmi.model.enumeration;
 
 /**
  * @author Christos KK Loverdos <loverdos@gmail.com>

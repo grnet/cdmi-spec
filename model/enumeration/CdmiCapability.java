@@ -33,25 +33,33 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
-
-import java.net.URI
+package gr.grnet.cdmi.model.enumeration;
 
 /**
- * The CDMI API.
+ * All known (to us) cdmi capabilities.
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait Cdmi
-  extends CdmiCapabilityApi
-  with    CdmiContainerApi
-  with    CdmiDataApi
-  with    CdmiDomainApi
-  with    CdmiQueueApi {
+public enum CdmiCapability {
+    // 8.2.3
+    cdmi_create_dataobject,
+    cdmi_create_reference,
+    cdmi_copy_dataobject,
+    cdmi_move_dataobject,
+    cdmi_deserialize_dataobject,
+    cdmi_serialize_dataobject,
+    cdmi_serialize_container,
+    cdmi_serialize_domain,
+    cdmi_serialize_queue,
 
-  /**
-   *
-   * @return the URI of the CDMI cloud
-   */
-  def rootURI: URI
+    cdmi_metadata_maxitems,
+    cdmi_metadata_maxsize,
+    cdmi_domains,
+    cdmi_queues,
+    cdmi_notifications,
+    cdmi_list_children,
+    cdmi_read_metadata,
+    cdmi_modify_metadata,
+    cdmi_create_container,
+    cdmi_delete_container,
 }

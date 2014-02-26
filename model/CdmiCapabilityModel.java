@@ -33,16 +33,14 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
-
-import gr.grnet.cdmi.model.CdmiContainerModel
-import scala.concurrent.Future
+package gr.grnet.cdmi.model;
 
 /**
- * API for container objects.
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi {
-  def getRootContainers(): Future[List[String]]
+public final class CdmiCapabilityModel {
+    public static final CdmiCapabilityModel Cached = new CdmiCapabilityModel();
+
+    public final boolean cdmi_create_data_object = true;
 }
