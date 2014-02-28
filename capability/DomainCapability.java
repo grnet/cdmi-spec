@@ -33,12 +33,21 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
-
+package gr.grnet.cdmi.capability;
 
 /**
- * API for container objects.
- *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+public enum DomainCapability implements ICapability {
+    // CDMI/v1.0.2/12.1.6
+    cdmi_create_domain,
+    cdmi_delete_domain,
+    cdmi_domain_summary,
+    cdmi_domain_members,
+    cdmi_list_children,
+    cdmi_read_metadata,
+    cdmi_modify_metadata,
+    cdmi_modify_deserialize_domain,
+    cdmi_copy_domain,
+    cdmi_deserialize_domain,
+}

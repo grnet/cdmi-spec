@@ -33,12 +33,11 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
-
+package gr.grnet.cdmi.capability;
 
 /**
- * API for container objects.
+ * Marker interface for CDMI capabilities.
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+public interface ICapability {}

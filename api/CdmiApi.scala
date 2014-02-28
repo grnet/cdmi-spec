@@ -35,7 +35,7 @@
 
 package gr.grnet.cdmi.api
 
-import gr.grnet.cdmi.model.CdmiCapabilityModel
+import gr.grnet.common.http.Result
 import scala.concurrent.Future
 
 
@@ -51,6 +51,5 @@ trait CdmiApi
   with    CdmiDomainApi
   with    CdmiQueueApi {
 
-  def capabilities: Future[CdmiCapabilityModel] =
-    Future.successful(CdmiCapabilityModel.Cached)
+  def capabilities: Future[Result]
 }

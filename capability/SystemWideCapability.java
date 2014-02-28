@@ -33,33 +33,58 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.model.enumeration;
+package gr.grnet.cdmi.capability;
 
 /**
  * All known (to us) cdmi capabilities.
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-public enum CdmiCapability {
-    // 8.2.3
-    cdmi_create_dataobject,
-    cdmi_create_reference,
-    cdmi_copy_dataobject,
-    cdmi_move_dataobject,
-    cdmi_deserialize_dataobject,
-    cdmi_serialize_dataobject,
-    cdmi_serialize_container,
-    cdmi_serialize_domain,
-    cdmi_serialize_queue,
-
+public enum SystemWideCapability implements ICapability {
+    // CDMI/v1.0.2/12.1.1
+    cdmi_domains,
+    cdmi_export_cifs,
+    cdmi_dataobjects,
+    cdmi_export_iscsi,
+    cdmi_export_nfs,
+    cdmi_export_occi_iscsi,
+    cdmi_export_webdav,
     cdmi_metadata_maxitems,
     cdmi_metadata_maxsize,
-    cdmi_domains,
+    cdmi_metadata_maxtotalsize,
+    cdmi_notification,
+    cdmi_logging,
+    cdmi_query,
+    cdmi_query_regex,
+    cdmi_query_contains,
+    cdmi_query_tags,
+    cdmi_query_value,
     cdmi_queues,
-    cdmi_notifications,
-    cdmi_list_children,
-    cdmi_read_metadata,
-    cdmi_modify_metadata,
-    cdmi_create_container,
-    cdmi_delete_container,
+    cdmi_security_access_control,
+    cdmi_security_audit,
+    cdmi_security_data_integrity,
+    cdmi_security_encryption,
+    cdmi_security_immutability,
+    cdmi_security_sanitization,
+    cdmi_serialization_json,
+    cdmi_snapshots,
+    cdmi_references,
+    cdmi_object_move_from_local,
+    cdmi_object_move_from_remote,
+    cdmi_object_move_from_ID,
+    cdmi_object_move_to_ID,
+    cdmi_object_copy_from_local,
+    cdmi_object_copy_from_remote,
+    cdmi_object_access_by_ID,
+    cdmi_post_dataobject_by_ID,
+    cdmi_post_queue_by_ID,
+    cdmi_deserialize_dataobject_by_ID,
+    cdmi_deserialize_queue_by_ID,
+    cdmi_serialize_dataobject_to_ID,
+    cdmi_serialize_domain_to_ID,
+    cdmi_serialize_container_to_ID,
+    cdmi_serialize_queue_to_ID,
+    cdmi_copy_dataobject_by_ID,
+    cdmi_copy_queue_by_ID,
+    cdmi_create_reference_by_ID,
 }

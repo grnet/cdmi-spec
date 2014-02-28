@@ -33,12 +33,40 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
-
+package gr.grnet.cdmi.capability;
 
 /**
- * API for container objects.
- *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+public enum ContainerCapability implements ICapability {
+    // CDMI/v1.0.2/12.1.5
+    cdmi_list_children,
+    cdmi_list_children_range,
+    cdmi_read_metadata,
+    cdmi_modify_metadata,
+    cdmi_modify_deserialize_container,
+    cdmi_snapshot,
+    cdmi_serialize_dataobject,
+    cdmi_serialize_container,
+    cdmi_serialize_queue,
+    cdmi_serialize_domain,
+    cdmi_deserialize_container,
+    cdmi_deserialize_queue,
+    cdmi_deserialize_dataobject,
+    cdmi_create_dataobject,
+    cdmi_post_dataobject,
+    cdmi_post_queue,
+    cdmi_create_container,
+    cdmi_create_queue,
+    cdmi_create_reference,
+    cdmi_export_container_cifs,
+    cdmi_export_container_nfs,
+    cdmi_export_container_iscsi,
+    cdmi_export_container_occi,
+    cdmi_export_container_webdav,
+    cdmi_delete_container,
+    cdmi_move_container,
+    cdmi_copy_container,
+    cdmi_move_dataobject,
+    cdmi_copy_dataobject,
+}

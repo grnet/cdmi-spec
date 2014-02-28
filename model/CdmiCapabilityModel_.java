@@ -33,12 +33,22 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
+package gr.grnet.cdmi.model;
 
+import gr.grnet.cdmi.http.CdmiContentType;
 
 /**
- * API for container objects.
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+public final class CdmiCapabilityModel_ {
+    private String objectType = CdmiContentType.Application_CdmiCapability.contentType();
+    private String objectID = "";
+    private String objectName = "cdmi_capabilities/";
+    private String parentUri = "/";
+    private String parentId = "";
+
+    public static final CdmiCapabilityModel_ Cached = new CdmiCapabilityModel_();
+
+    public final boolean cdmi_create_data_object = true;
+}

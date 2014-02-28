@@ -33,12 +33,17 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
-
+package gr.grnet.cdmi.model;
 
 /**
- * API for container objects.
+ * Enumerates supported CDMI versions.
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+public enum CdmiVersion {
+    V_1_0_2("1.0.2");
+
+    public final String version;
+
+    CdmiVersion(String version) { this.version = version; }
+}

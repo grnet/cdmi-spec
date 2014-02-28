@@ -33,12 +33,14 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
-
+package gr.grnet.cdmi.metadata;
 
 /**
- * API for container objects.
- *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+public enum LoggingQueueMetadata {
+    // CDMI/v1.0.2/20.5
+    cdmi_queue_type,
+    cdmi_logging_class,
+    cdmi_scope_specification,
+}

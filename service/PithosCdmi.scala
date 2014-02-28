@@ -33,14 +33,27 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.model;
+package gr.grnet.cdmi.service
+
+import gr.grnet.cdmi.api.CdmiApi
+import gr.grnet.cdmi.model.CapabilityModel
+import gr.grnet.common.http.Result
+import gr.grnet.common.keymap.KeyMap
+import gr.grnet.pithosj.api.SingleServicePithosApi
+import scala.concurrent.Future
 
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-public final class CdmiCapabilityModel {
-    public static final CdmiCapabilityModel Cached = new CdmiCapabilityModel();
+class PithosCdmi(pithos: SingleServicePithosApi) extends CdmiApi {
+  def createCDMIDataObject(containers: String, name: String, jsonPayload: String): Future[Result] = ???
 
-    public final boolean cdmi_create_data_object = true;
+  def createDataObject(containers: String, name: String, payload: String): Future[Result] = ???
+
+  def readCDMIDataObject(containers: String, name: String, fields: KeyMap): Future[Result] = ???
+
+  override def capabilities: Future[Result] = {
+    pithos.listContainers()
+  }
 }

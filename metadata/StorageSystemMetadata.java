@@ -33,12 +33,20 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
-
+package gr.grnet.cdmi.metadata;
 
 /**
- * API for container objects.
- *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+public enum StorageSystemMetadata {
+    // CDMI/v1.0.2/16.3
+    cdmi_size,
+    cdmi_ctime,
+    cdmi_atime,
+    cdmi_mtime,
+    cdmi_acount,
+    cdmi_mcount,
+    cdmi_hash,
+    cdmi_owner,
+    cdmi_acl,
+}

@@ -33,18 +33,45 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.model.enumeration;
+package gr.grnet.cdmi.metadata;
 
 /**
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-public enum CdmiMetadata {
-    cdmi_ctime,
-    cdmi_mtime,
-    cdmi_atime,
-    cdmi_mcount,
-    cdmi_acount,
-    mimetype,
-    filename,
-    metadataFilename,
+public enum DataSystemMetadata {
+    // CDMI/v1.0.2/16.4
+    cdmi_data_redundancy,
+    cdmi_immediate_redundancy,
+    cdmi_assignedsize,
+    cdmi_infrastructure_redundancy,
+    cdmi_data_dispersion,
+    cdmi_geographic_placement,
+    cdmi_retention_id,
+    cdmi_retention_period,
+    cdmi_retention_autodelete,
+    cdmi_hold_id,
+    cdmi_encryption,
+    cdmi_value_hash,
+    cdmi_latency,
+    cdmi_throughput,
+    cdmi_sanitization_method,
+    cdmi_RPO,
+    cdmi_RTO,
+
+    // CDMI/v1.0.2/16.5
+    cdmi_data_redundancy_provided,
+    cdmi_immediate_redundancy_provided,
+    cdmi_infrastructure_redundancy_provided,
+    cdmi_data_dispersion_provided,
+    cdmi_geographic_placement_provided,
+    cdmi_retention_period_provided,
+    cdmi_retention_autodelete_provided,
+    cdmi_hold_id_provided,
+    cdmi_encryption_provided,
+    cdmi_value_hash_provided,
+    cdmi_latency_provided,
+    cdmi_throughput_provided,
+    cdmi_sanitization_method_provided,
+    cdmi_RPO_provided,
+    cdmi_RTO_provided,
 }

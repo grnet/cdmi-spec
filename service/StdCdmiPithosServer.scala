@@ -33,12 +33,35 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
+package gr.grnet.cdmi.service
+
+import com.twitter.finagle.http.{Request, Response}
+import com.twitter.finagle.{Filter, Http}
+import com.twitter.server.TwitterServer
+import com.twitter.util.Await
+import gr.grnet.cdmi.api.CdmiApi
+import gr.grnet.pithosj.api.{SingleServicePithosApi, PithosApi}
+import gr.grnet.pithosj.impl.asynchttp.PithosClientFactory
+import org.jboss.netty.handler.codec.http.{HttpResponse, HttpRequest}
 
 
 /**
- * API for container objects.
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
+  val nettyToFinagle =
+    Filter.mk[HttpRequest, HttpResponse, Request, Response] { (req, service) =>
+      service(Request(req)) map { _.httpResponse }
+    }
+
+  val pithos: PithosApi = new SingleServicePithosApi(PithosClientFactory.newPithosClient())
+
+  val cdmiApi: CdmiApi = new PithosCdmi(pithos)
+
+  def main() {
+    val server = Http.serve(cdmiHttpPortFlag(), nettyToFinagle andThen mainService)
+
+    Await.ready(server)
+  }
+}

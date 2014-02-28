@@ -33,12 +33,20 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
-
+package gr.grnet.cdmi.capability;
 
 /**
- * API for container objects.
- *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+public enum QueueCapability implements ICapability {
+    // CDMI/v1.0.2/12.1.7
+    cdmi_read_value,
+    cdmi_read_metadata,
+    cdmi_modify_value,
+    cdmi_modify_metadata,
+    cdmi_modify_deserialize_queue,
+    cdmi_delete_queue,
+    cdmi_move_queue,
+    cdmi_copy_queue,
+    cdmi_reference_queue,
+}

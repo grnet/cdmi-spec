@@ -35,6 +35,10 @@
 
 package gr.grnet.cdmi.api
 
+import scala.concurrent.Future
+import gr.grnet.common.keymap.KeyMap
+import gr.grnet.common.http.Result
+
 
 /**
  * API for data objects.
@@ -42,4 +46,9 @@ package gr.grnet.cdmi.api
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
 trait CdmiDataApi {
+  def createCDMIDataObject(containers: String, name: String, jsonPayload: String): Future[Result]
+
+  def createDataObject(containers: String, name: String, payload: String): Future[Result]
+
+  def readCDMIDataObject(containers: String, name: String, fields: KeyMap): Future[Result]
 }

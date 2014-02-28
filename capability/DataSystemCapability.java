@@ -33,12 +33,27 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
-
+package gr.grnet.cdmi.capability;
 
 /**
- * API for container objects.
- *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+public enum DataSystemCapability implements ICapability {
+    // CDMI/v1.0.2/12.1.3
+    cdmi_assignedsize,
+    cdmi_data_redundancy,
+    cdmi_data_dispersion,
+    cdmi_data_retention,
+    cdmi_data_autodelete,
+    cdmi_data_holds,
+    cdmi_encryption,
+    cdmi_geographic_placement,
+    cdmi_immediate_redundancy,
+    cdmi_infrastructure_redundancy,
+    cdmi_latency,
+    cdmi_RPO,
+    cdmi_RTO,
+    cdmi_sanitization_method,
+    cdmi_throughput,
+    cdmi_value_hash,
+}

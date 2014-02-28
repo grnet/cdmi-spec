@@ -33,12 +33,15 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
+package gr.grnet.cdmi.command
 
+import gr.grnet.common.http.Command
+import gr.grnet.cdmi.model.CdmiVersion
 
 /**
- * API for container objects.
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+trait CdmiCommand extends Command {
+  def cdmiVersion: CdmiVersion = CdmiVersion.V_1_0_2
+}

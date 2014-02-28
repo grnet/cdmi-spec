@@ -33,12 +33,18 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.api
-
+package gr.grnet.cdmi.capability;
 
 /**
- * API for container objects.
- *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+public enum StorageSystemCapability implements ICapability {
+    // CDMI/v1.0.2/12.1.2
+    cdmi_acl,
+    cdmi_size,
+    cdmi_ctime,
+    cdmi_atime,
+    cdmi_mtime,
+    cdmi_acount,
+    cdmi_mcount,
+}
