@@ -37,14 +37,13 @@ package gr.grnet.cdmi.model
 
 import gr.grnet.cdmi.capability.{ICapability, ContainerCapability}
 import gr.grnet.cdmi.http.CdmiContentType
-import gr.grnet.common.http.IContentType
 
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
 case class CapabilityModel(
-  objectType: IContentType,
+  objectType: String,
   objectID: String,
   objectName: String,
   parentURI: String,
@@ -56,11 +55,11 @@ case class CapabilityModel(
 
 object CapabilityModel {
   def booleanCapabilitiesMap(caps: ICapability*): Map[ICapability, String] =
-    (for(cap ← caps) yield (cap, "true")).toMap
+    (for(cap ← caps) yield (cap, true.toString)).toMap
 
   def rootOf(children: List[String]) =
     CapabilityModel(
-      objectType = CdmiContentType.Application_CdmiCapability,
+      objectType = CdmiContentType.Application_CdmiCapability.contentType(),
       objectID = "",
       objectName = "",
       parentURI = "/",

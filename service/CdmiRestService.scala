@@ -47,6 +47,8 @@ import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
 import org.jboss.netty.handler.codec.http.{HttpMethod, HttpResponseStatus, DefaultHttpResponse, HttpResponse}
 import org.jboss.netty.util.CharsetUtil.UTF_8
 import gr.grnet.cdmi.api.CdmiApi
+import gr.grnet.cdmi.model.CapabilityModel
+import gr.grnet.common.json.Json
 
 /**
  *
@@ -97,11 +99,17 @@ trait CdmiRestService {
 
   val notImplementedService: Service[Request, Response] = makeSpecial(Status.NotImplemented, "")
 
+  val rootCapabilities: CapabilityModel = CapabilityModel.rootOf(Nil)
+
   /**
    * Return the capabilities of this CDMI implementation.
    */
   def GET_capabilities(request: Request): Future[Response] = {
-    val pithos
+    val caps = rootCapabilities
+    val jsonCaps = Json.objectToJsonString(caps)
+    val response = new DefaultHttpResponse(request.getProtocolVersion(), Status.Ok)
+    response.setContent(copiedBuffer(jsonCaps, UTF_8))
+    Future.value(Response(response))
   }
 
   def GET_objectById(request: Request, objectId: String): Future[Response] =
