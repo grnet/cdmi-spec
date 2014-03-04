@@ -40,15 +40,13 @@ import com.twitter.finagle.Service
 import com.twitter.finagle.http.path.{Path, /, Root}
 import com.twitter.finagle.http.service.RoutingService
 import com.twitter.finagle.http.{Status, Method, Response, Request}
-import com.twitter.server.util.JsonConverter
 import com.twitter.util.Future
-import java.net.{URLDecoder, InetSocketAddress}
-import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
-import org.jboss.netty.handler.codec.http.{HttpMethod, HttpResponseStatus, DefaultHttpResponse, HttpResponse}
-import org.jboss.netty.util.CharsetUtil.UTF_8
-import gr.grnet.cdmi.api.CdmiApi
 import gr.grnet.cdmi.model.CapabilityModel
 import gr.grnet.common.json.Json
+import java.net.{URLDecoder, InetSocketAddress}
+import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
+import org.jboss.netty.handler.codec.http.{HttpMethod, HttpResponseStatus, DefaultHttpResponse}
+import org.jboss.netty.util.CharsetUtil.UTF_8
 
 /**
  *
@@ -66,6 +64,22 @@ trait CdmiRestService {
 
   lazy val cdmiPithosTimeoutMillisFlag = flag("cdmi.pithos.timeout.millis", 1000L * 60L * 3L /* 3 min*/, "Millis to wait for Pithos response")
 
+  def bodyToResponse(
+    request: Request,
+    status: HttpResponseStatus,
+    body: String
+  ): Response = {
+    val response = new DefaultHttpResponse(request.getProtocolVersion(), status)
+    response.setContent(copiedBuffer(body, UTF_8))
+    Response(response)
+  }
+
+  def bodyToFutureResponse(
+    request: Request,
+    status: HttpResponseStatus,
+    body: String
+  ): Future[Response] = Future.value(bodyToResponse(request, status, body))
+
   def makeSpecial(status: HttpResponseStatus, reason: String): Service[Request, Response] =
     new Service[Request, Response] {
       override def apply(request: Request): Future[Response] = {
@@ -73,7 +87,6 @@ trait CdmiRestService {
         val status = HttpResponseStatus.NOT_FOUND
         val uri = request.uri
         val decodedUri = try URLDecoder.decode(uri, "UTF-8") catch { case e: Exception ⇒ s"(${e.getMessage}) ${uri}"}
-        val response = new DefaultHttpResponse(request.getProtocolVersion(), status)
         val body =
           if((reason eq null) || reason.isEmpty) {
             status.getCode.toString + " " + status.getReasonPhrase + "\n" +
@@ -86,8 +99,8 @@ trait CdmiRestService {
               method.getName          + " " + decodedUri +
             "[" + reason + "]"
           }
-        response.setContent(copiedBuffer(body, UTF_8))
-        Future.value(Response(response))
+
+        bodyToFutureResponse(request, status, body)
       }
     }
 
@@ -99,7 +112,7 @@ trait CdmiRestService {
 
   val notImplementedService: Service[Request, Response] = makeSpecial(Status.NotImplemented, "")
 
-  val rootCapabilities: CapabilityModel = CapabilityModel.rootOf(Nil)
+  val rootCapabilities: CapabilityModel = CapabilityModel.rootOf()
 
   /**
    * Return the capabilities of this CDMI implementation.
@@ -107,9 +120,8 @@ trait CdmiRestService {
   def GET_capabilities(request: Request): Future[Response] = {
     val caps = rootCapabilities
     val jsonCaps = Json.objectToJsonString(caps)
-    val response = new DefaultHttpResponse(request.getProtocolVersion(), Status.Ok)
-    response.setContent(copiedBuffer(jsonCaps, UTF_8))
-    Future.value(Response(response))
+
+    bodyToFutureResponse(request, Status.Ok, jsonCaps)
   }
 
   def GET_objectById(request: Request, objectId: String): Future[Response] =

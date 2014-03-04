@@ -39,6 +39,10 @@ package gr.grnet.cdmi.model
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-class CdmiDomainModel {
-
+object Model {
+  def childrenRangeOf(children: List[String]): String =
+    children match {
+      case Nil ⇒ ""
+      case _   ⇒ s"0-${children.size - 1}"
+    }
 }

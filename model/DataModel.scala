@@ -33,15 +33,12 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.keymap
-
-import gr.grnet.common.keymap.HeaderKey
-import gr.grnet.cdmi.http.CdmiHeader
+package gr.grnet.cdmi.model
 
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-object HeaderKeys {
-  final val X_CDMI_Specification_Version = HeaderKey[String](CdmiHeader.X_CDMI_Specification_Version)
+class DataModel {
+
 }

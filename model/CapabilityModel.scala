@@ -57,14 +57,24 @@ object CapabilityModel {
   def booleanCapabilitiesMap(caps: ICapability*): Map[ICapability, String] =
     (for(cap ← caps) yield (cap, true.toString)).toMap
 
-  def rootOf(children: List[String]) =
+  def rootOf(
+    children: List[String] = Nil,
+    parentID: String = "",
+    parentURI: String = "/",
+    objectID: String = "",
+    objectName: String = "cdmi_capabilities/"
+  ) =
     CapabilityModel(
       objectType = CdmiContentType.Application_CdmiCapability.contentType(),
-      objectID = "",
-      objectName = "",
-      parentURI = "/",
-      parentID = "",
-      capabilities = booleanCapabilitiesMap(ContainerCapability.cdmi_list_children),
+      objectID = objectID,
+      objectName = objectName,
+      parentURI = parentURI,
+      parentID = parentID,
+      capabilities = booleanCapabilitiesMap(
+        ContainerCapability.cdmi_list_children,
+        ContainerCapability.cdmi_create_container,
+        ContainerCapability.cdmi_delete_container
+      ),
       childrenRange = if(children.size == 0) "0-0" else s"0-${children.size - 1}",
       children = children
     )

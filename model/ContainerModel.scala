@@ -35,10 +35,22 @@
 
 package gr.grnet.cdmi.model
 
+import gr.grnet.cdmi.http.CdmiContentType
+
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-class CdmiDataModel {
-
-}
+case class ContainerModel(
+  objectType: String = CdmiContentType.Application_CdmiContainer.contentType(),
+  objectID: String,
+  objectName: String,
+  parentURI: String,
+  parentID: String,
+  domainURI: String,
+  capabilitiesURI: String,
+  completionStatus: String,
+  metadata: Map[String, String],
+  childrenrange: String,
+  children: List[String]
+)

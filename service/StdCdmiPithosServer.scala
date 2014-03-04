@@ -35,12 +35,21 @@
 
 package gr.grnet.cdmi.service
 
-import com.twitter.finagle.http.{Request, Response}
+import com.twitter.finagle.http.{Status, Response, Request}
 import com.twitter.finagle.{Filter, Http}
 import com.twitter.server.TwitterServer
-import com.twitter.util.Await
+import com.twitter.util.{Return, Throw, Promise, Future, Await}
+import gr.grnet.pithosj.api.PithosApi
+import gr.grnet.pithosj.core.ServiceInfo
+import gr.grnet.pithosj.core.keymap.PithosResultKeys
+import gr.grnet.pithosj.impl.asynchttp.PithosClientFactory
 import org.jboss.netty.handler.codec.http.{HttpResponse, HttpRequest}
-
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Failure, Success}
+import gr.grnet.cdmi.model.{Model, ContainerModel}
+import gr.grnet.common.json.Json
+import java.util.Locale
+import gr.grnet.cdmi.http.CdmiContentType
 
 /**
  *
@@ -51,6 +60,111 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
     Filter.mk[HttpRequest, HttpResponse, Request, Response] { (req, service) =>
       service(Request(req)) map { _.httpResponse }
     }
+
+  val pithos: PithosApi = PithosClientFactory.newPithosClient()
+
+  def pithosURL  (request: Request): String =
+    request.headers().get("X-CDMI-Pithos-Service-URL") match {
+      case null ⇒ System.getenv("X_CDMI_Pithos_Service_URL".toUpperCase(Locale.US))
+      case string ⇒ string
+    }
+
+  def pithosUUID (request: Request): String =
+    request.headers().get("X-CDMI-Pithos-UUID") match {
+      case null ⇒ System.getenv("X_CDMI_Pithos_UUID".toUpperCase(Locale.US))
+      case string ⇒ string
+    }
+
+  def pithosToken(request: Request): String =
+    request.headers().get("X-CDMI-Pithos-Token") match {
+      case null ⇒
+        System.getenv("X_CDMI_Pithos_Token".toUpperCase(Locale.US)) match {
+          case null ⇒
+            request.headers().get("X-Auth-Token") match {
+              case null ⇒ System.getenv("X_Auth_Token".toUpperCase(Locale.US))
+              case string ⇒ string
+            }
+
+          case string ⇒ string
+        }
+
+      case string ⇒ string
+    }
+
+  def pithosInfo(request: Request) = (pithosURL(request), pithosUUID(request), pithosToken(request))
+
+  /**
+   * Lists the contents of a container.
+   *
+   * @param request
+   * @param container
+   * @return
+   */
+  override def GET_container(
+    request: Request, container: String
+  ): Future[Response] = {
+
+    val (pithosURL, pithosUUID, pithosToken) = pithosInfo(request)
+    println("pithosURL = " + pithosURL)
+    println("pithosUUID = " + pithosUUID)
+    println("pithosToken = " + pithosToken)
+    // TODO check nulls
+    val serviceInfo = ServiceInfo(pithosURL, pithosUUID, pithosToken)
+
+    val promise = Promise[List[String]]()
+    val sf_result = pithos.listObjectsInContainer(serviceInfo, container)
+
+    sf_result.onComplete {
+      case Success(result) ⇒
+        val listObjectsInPath = result.resultData.get(PithosResultKeys.ListObjectsInPath, Nil)
+        val children =
+          for {
+            oip ← listObjectsInPath
+          } yield {
+            s"${oip.container}/${oip.path}"
+          }
+        promise.setValue(children)
+
+      case Failure(t) ⇒
+        promise.setException(t)
+    }
+
+    promise.transform {
+      case Return(children) ⇒
+        val container = ContainerModel(
+          objectType = CdmiContentType.Application_CdmiContainer.contentType(),
+          objectID = request.uri,
+          objectName = request.uri,
+          parentURI = request.uri.substring(0, request.uri.lastIndexOf("/")),
+          parentID = request.uri.substring(0, request.uri.lastIndexOf("/")),
+          domainURI = "",
+          capabilitiesURI = "",
+          completionStatus = "Complete",
+          metadata = Map(),
+          childrenrange = Model.childrenRangeOf(children),
+          children = children
+        )
+        val jsonContainer = Json.objectToJsonString(container)
+        bodyToFutureResponse(request, Status.Ok, jsonContainer)
+
+      case Throw(t) ⇒
+        t.printStackTrace(System.err)
+        bodyToFutureResponse(request, Status.InternalServerError, t.toString)
+    }
+  }
+
+  /**
+   * Creates a new container.
+   *
+   * @param request
+   * @param container
+   * @return
+   */
+  override def PUT_container(
+    request: Request, container: String
+  ): Future[Response] = {
+    bodyToFutureResponse(request, Status.Ok, request.toString())
+  }
 
   def main() {
     val server = Http.serve(cdmiHttpPortFlag(), nettyToFinagle andThen mainService)
