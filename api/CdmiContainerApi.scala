@@ -35,10 +35,15 @@
 
 package gr.grnet.cdmi.api
 
+import scala.concurrent.Future
+import gr.grnet.cdmi.model.ContainerModel
+
 
 /**
  * API for container objects.
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait CdmiContainerApi
+trait CdmiContainerApi {
+  def listContainer(container: String): Future[ContainerModel]
+}

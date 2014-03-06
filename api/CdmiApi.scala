@@ -35,9 +35,6 @@
 
 package gr.grnet.cdmi.api
 
-import gr.grnet.common.http.Result
-import scala.concurrent.Future
-
 
 /**
  * The CDMI API.
@@ -50,6 +47,4 @@ trait CdmiApi
   with    CdmiDataApi
   with    CdmiDomainApi
   with    CdmiQueueApi {
-
-  def capabilities: Future[Result]
 }

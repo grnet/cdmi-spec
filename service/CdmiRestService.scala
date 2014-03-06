@@ -37,7 +37,7 @@ package gr.grnet.cdmi.service
 
 import com.twitter.app.Flags
 import com.twitter.finagle.Service
-import com.twitter.finagle.http.path.{Path, /, Root}
+import com.twitter.finagle.http.path.{Path, /, /:, Root}
 import com.twitter.finagle.http.service.RoutingService
 import com.twitter.finagle.http.{Status, Method, Response, Request}
 import com.twitter.util.Future
@@ -135,88 +135,83 @@ trait CdmiRestService {
 
   /**
    * Read the contents or value of a data object (depending on the Accept header).
-   *
-   * @param request
-   * @param container
-   * @param name
-   * @return
    */
-  def GET_objectByName(request: Request, container: String, name: String): Future[Response] =
+  def GET_object(request: Request, objectPath: List[String]): Future[Response] =
     notImplementedService(request)
 
   /**
    * Create a data object in a container.
-   *
-   * @param request
-   * @param container
-   * @param name
-   * @return
    */
-  def PUT_objectByName(request: Request, container: String, name: String): Future[Response] =
+  def PUT_object(request: Request, objectPath: List[String]): Future[Response] =
     notImplementedService(request)
 
   /**
    * Lists the contents of a container.
-   *
-   * @param request
-   * @param container
-   * @return
    */
-  def GET_container(request: Request, container: String): Future[Response] =
+  def GET_container(request: Request, containerPath: List[String]): Future[Response] =
     notImplementedService(request)
 
   /**
    * Creates a new container.
-   *
-   * @param request
-   * @param container
-   * @return
    */
-  def PUT_container(request: Request, container: String): Future[Response] =
+  def PUT_container(request: Request, containerPath: List[String]): Future[Response] =
     notImplementedService(request)
 
   def routingTable: PartialFunction[Request, Future[Response]] = {
     case request ⇒
       val method = request.method
-      val uri = request.uri
-      val path = Path(uri)
+      val uri = request.uri.replaceAll("/+", "/")
 
       val getObjectByIdPF: (HttpMethod, String) ⇒ Future[Response] =
         (method, objectId) ⇒ method match {
-          case Method.Get ⇒ GET_objectById(request, objectId)
+          case Method.Get  ⇒ GET_objectById(request, objectId)
           case Method.Post ⇒ POST_objectById(request, objectId)
-          case Method.Put ⇒ PUT_objectById(request, objectId)
-          case _ ⇒ notAllowedService(request)
+          case Method.Put  ⇒ PUT_objectById(request, objectId)
+          case _           ⇒ notAllowedService(request)
         }
 
-      path match {
-        case Root / "cdmi_capabilities" ⇒
+      println(method.getName + " " + uri)
+      val split = uri.split("/").toList
+      val lastSlash = uri(uri.length - 1) == '/'
+      println(method.getName + " " + split.map(s ⇒ "\"" + s + "\"").mkString(" ") + (if(lastSlash) " [/]" else ""))
+      val SLASH = true
+      val NOSLASH = false
+
+      (split, lastSlash) match {
+        case (Nil, _) ⇒
+          "/"
+          notAllowedService(request)
+
+        case ("" :: Nil, _) ⇒
+          ""
+          notAllowedService(request)
+
+        case ("" ::  "cdmi_capabilities" :: Nil, SLASH) ⇒
+          "/cdmi_capabilities/"
+
           method match {
             case Method.Get ⇒ GET_capabilities(request)
             case _ ⇒ notAllowedService(request)
           }
 
-        case Root / container ⇒
+        case ("" :: "cdmi_objectid" :: objectId :: Nil, _) ⇒
+          getObjectByIdPF(method, objectId)
+        case ("" :: "cdmi_objectId" :: objectId :: Nil, _) ⇒
+          getObjectByIdPF(method, objectId)
+        case ("" :: "cdmi_objectID" :: objectId :: Nil, _) ⇒
+          getObjectByIdPF(method, objectId)
+
+        case ("" :: containerPath, SLASH) ⇒
           method match {
-            case Method.Get ⇒ GET_container(request, container)
-            case Method.Put ⇒ PUT_container(request, container)
+            case Method.Get ⇒ GET_container(request, containerPath)
+            case Method.Put ⇒ PUT_container(request, containerPath)
             case _ ⇒ notAllowedService(request)
           }
 
-        // The first case `cdmi_objectid` is the correct version.
-        // The other two are for convenience.
-        // CDMI/v1.0.2/section 5.10
-        case Root / "cdmi_objectid" / objectId ⇒
-          getObjectByIdPF(method, objectId)
-        case Root / "cdmi_objectId" / objectId ⇒
-          getObjectByIdPF(method, objectId)
-        case Root / "cdmi_objectID" / objectId ⇒
-          getObjectByIdPF(method, objectId)
-
-        case Root / container / objectName ⇒
+        case ("" :: objectPath, NOSLASH) ⇒
           method match {
-            case Method.Get ⇒ GET_objectByName(request, container, objectName)
-            case Method.Put ⇒ PUT_objectByName(request, container, objectName)
+            case Method.Get ⇒ GET_object(request, objectPath)
+            case Method.Put ⇒ PUT_object(request, objectPath)
             case _ ⇒ notAllowedService(request)
           }
 

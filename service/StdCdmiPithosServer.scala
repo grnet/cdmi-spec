@@ -50,6 +50,7 @@ import gr.grnet.cdmi.model.{Model, ContainerModel}
 import gr.grnet.common.json.Json
 import java.util.Locale
 import gr.grnet.cdmi.http.CdmiContentType
+import gr.grnet.common.text.NoTrailingSlash
 
 /**
  *
@@ -97,11 +98,10 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
    * Lists the contents of a container.
    *
    * @param request
-   * @param container
    * @return
    */
   override def GET_container(
-    request: Request, container: String
+    request: Request, containerPath: List[String]
   ): Future[Response] = {
 
     val (pithosURL, pithosUUID, pithosToken) = pithosInfo(request)
@@ -112,7 +112,10 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
     val serviceInfo = ServiceInfo(pithosURL, pithosUUID, pithosToken)
 
     val promise = Promise[List[String]]()
-    val sf_result = pithos.listObjectsInContainer(serviceInfo, container)
+//    val container = containerPath mkString "/"
+    val container = containerPath.head
+    val path = containerPath.tail mkString "/" match { case "" ⇒ "/"; case s ⇒ "/" + s }
+    val sf_result = pithos.listObjectsInPath(serviceInfo, container, path)
 
     sf_result.onComplete {
       case Success(result) ⇒
@@ -121,7 +124,18 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
           for {
             oip ← listObjectsInPath
           } yield {
-            s"${oip.container}/${oip.path}"
+            oip.contentType match {
+              case "application/directory" | "application/folder" ⇒
+                s"${oip.container}/${oip.path}/"
+
+              case contentType if contentType.startsWith("application/directory;") ||
+                                  contentType.startsWith("application/folder;") ⇒
+                s"${oip.container}/${oip.path}/"
+
+              case _ ⇒
+                s"${oip.container}/${oip.path}"
+            }
+
           }
         promise.setValue(children)
 
@@ -129,14 +143,15 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
         promise.setException(t)
     }
 
+    val parentURI = request.uri.substring(0, request.uri.noTrailingSlash.lastIndexOf('/') + 1)
     promise.transform {
       case Return(children) ⇒
         val container = ContainerModel(
           objectType = CdmiContentType.Application_CdmiContainer.contentType(),
           objectID = request.uri,
           objectName = request.uri,
-          parentURI = request.uri.substring(0, request.uri.lastIndexOf("/")),
-          parentID = request.uri.substring(0, request.uri.lastIndexOf("/")),
+          parentURI = parentURI,
+          parentID = parentURI,
           domainURI = "",
           capabilitiesURI = "",
           completionStatus = "Complete",
@@ -155,13 +170,9 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
 
   /**
    * Creates a new container.
-   *
-   * @param request
-   * @param container
-   * @return
    */
   override def PUT_container(
-    request: Request, container: String
+    request: Request, containerPath: List[String]
   ): Future[Response] = {
     bodyToFutureResponse(request, Status.Ok, request.toString())
   }

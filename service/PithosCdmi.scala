@@ -36,7 +36,7 @@
 package gr.grnet.cdmi.service
 
 import gr.grnet.cdmi.api.CdmiApi
-import gr.grnet.cdmi.model.CapabilityModel
+import gr.grnet.cdmi.model.{ContainerModel, CapabilityModel}
 import gr.grnet.common.http.Result
 import gr.grnet.common.keymap.KeyMap
 import gr.grnet.pithosj.api.SingleServicePithosApi
@@ -53,7 +53,5 @@ class PithosCdmi(pithos: SingleServicePithosApi) extends CdmiApi {
 
   def readCDMIDataObject(containers: String, name: String, fields: KeyMap): Future[Result] = ???
 
-  override def capabilities: Future[Result] = {
-    pithos.listContainers()
-  }
+  override def listContainer(container: String): Future[ContainerModel] = ???
 }
