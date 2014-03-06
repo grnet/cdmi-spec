@@ -35,10 +35,24 @@
 
 package gr.grnet.cdmi.model
 
+import gr.grnet.cdmi.http.CdmiContentType
+
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-class DataModel {
-
-}
+case class DataObjectModel(
+  objectType: String = CdmiContentType.Application_CdmiData.contentType(),
+  objectID: String,
+  objectName: String,
+  parentURI: String,
+  parentID: String,
+  domainURI: String,
+  capabilitiesURI: String = "/cdmi_capabilities/dataobject/",
+  completionStatus: String = "Complete",
+  mimetype: String,
+  metadata: Map[String, String], // e.g. cdmi_size
+  valuetransferencoding: String, // "utf-8" or "base64"
+  valuerange: String,
+  value: String
+)

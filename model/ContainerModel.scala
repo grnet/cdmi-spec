@@ -48,9 +48,9 @@ case class ContainerModel(
   parentURI: String,
   parentID: String,
   domainURI: String,
-  capabilitiesURI: String,
-  completionStatus: String,
-  metadata: Map[String, String],
+  capabilitiesURI: String = "/cdmi_capabilities/container/",
+  completionStatus: String = "Complete",
+  metadata: Map[String, String] = Map(),
   childrenrange: String,
   children: List[String]
 )

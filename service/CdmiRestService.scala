@@ -47,6 +47,7 @@ import java.net.{URLDecoder, InetSocketAddress}
 import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
 import org.jboss.netty.handler.codec.http.{HttpMethod, HttpResponseStatus, DefaultHttpResponse}
 import org.jboss.netty.util.CharsetUtil.UTF_8
+import gr.grnet.common.text.{UriToList, NormalizeUri}
 
 /**
  *
@@ -160,7 +161,7 @@ trait CdmiRestService {
   def routingTable: PartialFunction[Request, Future[Response]] = {
     case request ⇒
       val method = request.method
-      val uri = request.uri.replaceAll("/+", "/")
+      val normalizedUri = request.uri.normalizeUri
 
       val getObjectByIdPF: (HttpMethod, String) ⇒ Future[Response] =
         (method, objectId) ⇒ method match {
@@ -170,14 +171,14 @@ trait CdmiRestService {
           case _           ⇒ notAllowedService(request)
         }
 
-      println(method.getName + " " + uri)
-      val split = uri.split("/").toList
-      val lastSlash = uri(uri.length - 1) == '/'
-      println(method.getName + " " + split.map(s ⇒ "\"" + s + "\"").mkString(" ") + (if(lastSlash) " [/]" else ""))
+      println(method.getName + " " + normalizedUri)
+      val uriList = normalizedUri.uriToList
+      val lastSlash = normalizedUri(normalizedUri.length - 1) == '/'
+      println(method.getName + " " + uriList.map(s ⇒ "\"" + s + "\"").mkString(" ") + (if(lastSlash) " [/]" else ""))
       val SLASH = true
       val NOSLASH = false
 
-      (split, lastSlash) match {
+      (uriList, lastSlash) match {
         case (Nil, _) ⇒
           "/"
           notAllowedService(request)
