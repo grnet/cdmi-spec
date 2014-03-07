@@ -68,7 +68,7 @@ trait CdmiRestService {
   def bodyToResponse(
     request: Request,
     status: HttpResponseStatus,
-    body: String
+    body: String = ""
   ): Response = {
     val response = new DefaultHttpResponse(request.getProtocolVersion(), status)
     response.setContent(copiedBuffer(body, UTF_8))
@@ -78,7 +78,7 @@ trait CdmiRestService {
   def bodyToFutureResponse(
     request: Request,
     status: HttpResponseStatus,
-    body: String
+    body: String = ""
   ): Future[Response] = Future.value(bodyToResponse(request, status, body))
 
   def makeSpecial(status: HttpResponseStatus, reason: String): Service[Request, Response] =
@@ -106,6 +106,10 @@ trait CdmiRestService {
     }
 
   val badRequestService: Service[Request, Response] = makeSpecial(Status.BadRequest, "")
+
+  val unauthorizedService: Service[Request, Response] = makeSpecial(Status.NotFound, "")
+
+  val forbiddenService: Service[Request, Response] = makeSpecial(Status.Forbidden, "")
 
   val notFoundService: Service[Request, Response] = makeSpecial(Status.NotFound, "")
 

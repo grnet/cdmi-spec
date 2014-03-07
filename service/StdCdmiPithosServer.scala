@@ -39,28 +39,31 @@ import com.twitter.finagle.http.{Status, Response, Request}
 import com.twitter.finagle.{Filter, Http}
 import com.twitter.server.TwitterServer
 import com.twitter.util.{Return, Throw, Promise, Future, Await}
+import gr.grnet.cdmi.metadata.StorageSystemMetadata
+import gr.grnet.cdmi.model.{DataObjectModel, Model, ContainerModel}
+import gr.grnet.common.io.{Base64, CloseAnyway, DeleteAnyway}
+import gr.grnet.common.json.Json
+import gr.grnet.common.text.{NormalizeUri, UriToList, ParentUri}
 import gr.grnet.pithosj.api.PithosApi
 import gr.grnet.pithosj.core.ServiceInfo
 import gr.grnet.pithosj.core.keymap.{PithosHeaderKeys, PithosResultKeys}
 import gr.grnet.pithosj.impl.asynchttp.PithosClientFactory
-import org.jboss.netty.handler.codec.http.{HttpResponse, HttpRequest}
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.{Failure, Success}
-import gr.grnet.cdmi.model.{DataObjectModel, Model, ContainerModel}
-import gr.grnet.common.json.Json
-import java.util.Locale
-import gr.grnet.common.text.NoTrailingSlash
-import gr.grnet.common.text.{NormalizeUri, UriToList}
 import java.io.{FileOutputStream, File}
 import java.nio.file.Files
-import gr.grnet.common.io.{Base64, CloseAnyway, DeleteAnyway}
-import gr.grnet.cdmi.metadata.StorageSystemMetadata
+import java.util.Locale
+import org.jboss.netty.handler.codec.http.{HttpResponseStatus, HttpResponse, HttpRequest}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Failure, Success}
 
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
 object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
+  sealed trait Info[+T]
+  final case class GoodInfo[T](value: T) extends Info[T]
+  final case class BadInfo(status: HttpResponseStatus, extraInfo: String = "") extends Info[Nothing]
+
   val nettyToFinagle =
     Filter.mk[HttpRequest, HttpResponse, Request, Response] { (req, service) =>
       service(Request(req)) map { _.httpResponse }
@@ -96,82 +99,122 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
       case string ⇒ string
     }
 
-  def pithosInfo(request: Request) = (pithosURL(request), pithosUUID(request), pithosToken(request))
+  def getPithosServiceInfo(request: Request): Info[ServiceInfo] = {
+    val _pithosURL = pithosURL(request)
+    val _pithosUUID = pithosUUID(request)
+    val _pithosToken = pithosToken(request)
+
+    println("pithosURL = " + _pithosURL)
+    println("pithosUUID = " + _pithosUUID)
+    println("pithosToken = " + _pithosToken)
+
+    (_pithosURL, _pithosUUID, _pithosToken) match {
+      case (null, _, _) ⇒
+        BadInfo(
+          Status.BadRequest,
+          "Unknown Pithos+ service URL. Please set header X-CDMI-Pithos-Service-URL"
+        )
+
+      case (_, null, _) ⇒
+        BadInfo(
+          Status.BadRequest,
+          "Unknown Pithos+ UUID. Please set header X-CDMI-Pithos-UUID"
+        )
+
+      case (_, _, null) ⇒
+        BadInfo(
+          Status.BadRequest,
+          "Unknown Pithos+ user token. Please set header X-CDMI-Pithos-Token or X-Auth-Token"
+        )
+
+      case good ⇒
+        GoodInfo(ServiceInfo(_pithosURL, _pithosUUID, _pithosToken))
+    }
+  }
+
+  def newResultPromise[T]: Promise[Info[T]] = Promise[Info[T]]()
 
   /**
    * Lists the contents of a container.
-   *
-   * @param request
-   * @return
    */
   override def GET_container(
     request: Request, containerPath: List[String]
   ): Future[Response] = {
 
-    val (pithosURL, pithosUUID, pithosToken) = pithosInfo(request)
-    println("pithosURL = " + pithosURL)
-    println("pithosUUID = " + pithosUUID)
-    println("pithosToken = " + pithosToken)
-    // TODO check nulls
-    val serviceInfo = ServiceInfo(pithosURL, pithosUUID, pithosToken)
 
-    val promise = Promise[List[String]]()
-    val container = containerPath.head
-    val path = containerPath.tail mkString "/" match { case "" ⇒ "/"; case s ⇒ "/" + s }
-    val sf_result = pithos.listObjectsInPath(serviceInfo, container, path)
+    getPithosServiceInfo(request) match {
+      case BadInfo(status, extraInfo) ⇒
+        bodyToFutureResponse(request, status, extraInfo)
 
-    sf_result.onComplete {
-      case Success(result) ⇒
-        if(result.isSuccess) {
-          val listObjectsInPath = result.resultData.get(PithosResultKeys.ListObjectsInPath, Nil)
-          val children =
-            for {
-              oip ← listObjectsInPath
-            } yield {
-              oip.contentType match {
-                case "application/directory" | "application/folder" ⇒
-                  s"${oip.container}/${oip.path}/"
+      case GoodInfo(serviceInfo) ⇒
+        val promise = newResultPromise[List[String]]
+        val container = containerPath.head
+        val path = containerPath.tail mkString "/" match { case "" ⇒ "/"; case s ⇒ "/" + s }
+        // FIXME If the folder does not exist, the result here is just an empty folder
+        val sf_result = pithos.listObjectsInPath(serviceInfo, container, path)
 
-                case contentType if contentType.startsWith("application/directory;") ||
-                  contentType.startsWith("application/folder;") ⇒
-                  s"${oip.container}/${oip.path}/"
+        sf_result.onComplete {
+          case Success(result) ⇒
+            if(result.isSuccess) {
+              val listObjectsInPath = result.resultData.get(PithosResultKeys.ListObjectsInPath, Nil)
+              val children =
+                for {
+                  oip ← listObjectsInPath
+                } yield {
+                  // Pithos returns all the path part after the pithos container.
+                  // Note that Pithos container is not the same as CDMI container.
+                  val path = oip.path.lastIndexOf('/') match {
+                    case -1 ⇒ oip.path
+                    case i ⇒ oip.path.substring(i + 1)
+                  }
 
-                case _ ⇒
-                  s"${oip.container}/${oip.path}"
-              }
+                  oip.contentType match {
+                    case "application/directory" | "application/folder" ⇒
+                      s"${path}/"
 
+                    case contentType if contentType.startsWith("application/directory;") ||
+                      contentType.startsWith("application/folder;") ⇒
+                      s"${path}/"
+
+                    case _ ⇒
+                      path
+                  }
+
+                }
+              promise.setValue(GoodInfo(children))
             }
-          promise.setValue(children)
+            else {
+              promise.setValue(BadInfo(HttpResponseStatus.valueOf(result.statusCode)))
+            }
+
+          case Failure(t) ⇒
+            promise.setException(t)
         }
-        else {
-          promise.setException(new Exception(s"Original response: ${result.statusCode} ${result.statusText}"))
+
+        promise.transform {
+          case Return(GoodInfo(children)) ⇒
+            val uri = request.uri
+            val parentURI = uri.parentUri
+
+            val container = ContainerModel(
+              objectID = uri,
+              objectName = uri,
+              parentURI = parentURI,
+              parentID = parentURI,
+              domainURI = "",
+              childrenrange = Model.childrenRangeOf(children),
+              children = children
+            )
+            val jsonContainer = Json.objectToJsonString(container)
+            bodyToFutureResponse(request, Status.Ok, jsonContainer)
+
+          case Return(BadInfo(status, extraInfo)) ⇒
+            bodyToFutureResponse(request, status, extraInfo)
+
+          case Throw(t) ⇒
+            t.printStackTrace(System.err)
+            bodyToFutureResponse(request, Status.InternalServerError, t.toString)
         }
-
-      case Failure(t) ⇒
-        promise.setException(t)
-    }
-
-    promise.transform {
-      case Return(children) ⇒
-        val uri = request.uri
-        val parentURI = uri.substring(0, uri.noTrailingSlash.lastIndexOf('/') + 1)
-
-        val container = ContainerModel(
-          objectID = uri,
-          objectName = uri,
-          parentURI = parentURI,
-          parentID = parentURI,
-          domainURI = "",
-          capabilitiesURI = "",
-          childrenrange = Model.childrenRangeOf(children),
-          children = children
-        )
-        val jsonContainer = Json.objectToJsonString(container)
-        bodyToFutureResponse(request, Status.Ok, jsonContainer)
-
-      case Throw(t) ⇒
-        t.printStackTrace(System.err)
-        bodyToFutureResponse(request, Status.InternalServerError, t.toString)
     }
   }
 
@@ -181,7 +224,42 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
   override def PUT_container(
     request: Request, containerPath: List[String]
   ): Future[Response] = {
-    bodyToFutureResponse(request, Status.Ok, request.toString())
+    getPithosServiceInfo(request) match {
+      case BadInfo(status, extraInfo) ⇒
+        bodyToFutureResponse(request, status, extraInfo)
+
+      case GoodInfo(serviceInfo) ⇒
+        val promise = newResultPromise[Unit]
+        val container = containerPath.head
+        val path = containerPath.tail mkString "/" match { case "" ⇒ "/"; case s ⇒ "/" + s }
+        // FIXME If the folder does not exist, the result here is just an empty folder
+        val sf_result = pithos.createDirectory(serviceInfo, container, path)
+
+        sf_result.onComplete {
+          case Success(result) ⇒
+            if(result.isSuccess) {
+              promise.setValue(GoodInfo(()))
+            }
+            else {
+              promise.setValue(BadInfo(HttpResponseStatus.valueOf(result.statusCode)))
+            }
+
+          case Failure(t) ⇒
+            promise.setException(t)
+        }
+
+        promise.transform {
+          case Return(GoodInfo(_)) ⇒
+            bodyToFutureResponse(request, Status.Ok)
+
+          case Return(BadInfo(status, extraInfo)) ⇒
+            bodyToFutureResponse(request, status, extraInfo)
+
+          case Throw(t) ⇒
+            t.printStackTrace(System.err)
+            bodyToFutureResponse(request, Status.InternalServerError, t.toString)
+        }
+    }
   }
 
 
@@ -199,63 +277,72 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
   override def GET_object(
     request: Request, objectPath: List[String]
   ): Future[Response] = {
-    val (pithosURL, pithosUUID, pithosToken) = pithosInfo(request)
-    println("pithosURL = " + pithosURL)
-    println("pithosUUID = " + pithosUUID)
-    println("pithosToken = " + pithosToken)
-    // TODO check nulls
-    val serviceInfo = ServiceInfo(pithosURL, pithosUUID, pithosToken)
 
-    case class GetFileInfo(file: File, contentType: String)
-    val promise = Promise[GetFileInfo]()
-    val container = objectPath.head
-    val path = objectPath.tail.mkString("/")
-    println("path = " + path)
-    val tmpFile = Files.createTempFile("cdmi-pithos-", null).toFile
-    val tmpFileOut = new FileOutputStream(tmpFile)
-    val sf_result = pithos.getObject(serviceInfo, container, path, null, tmpFileOut)
-    sf_result.onComplete {
-      case Success(result) ⇒
-        tmpFileOut.closeAnyway()
+    getPithosServiceInfo(request) match {
+      case BadInfo(status, extraInfo) ⇒
+        bodyToFutureResponse(request, status, extraInfo)
 
-        if(result.isSuccess) {
-          promise.setValue(GetFileInfo(tmpFile, result.responseHeaders.getEx(PithosHeaderKeys.Standard.Content_Type)))
+      case GoodInfo(serviceInfo) ⇒
+        case class GetFileInfo(file: File, contentType: String)
+        val promise = newResultPromise[GetFileInfo]
+        val container = objectPath.head
+        val path = objectPath.tail.mkString("/")
+        println("path = " + path)
+        val tmpFile = Files.createTempFile("cdmi-pithos-", null).toFile
+        val tmpFileOut = new FileOutputStream(tmpFile)
+        val sf_result = pithos.getObject(serviceInfo, container, path, null, tmpFileOut)
+        sf_result.onComplete {
+          case Success(result) ⇒
+            tmpFileOut.closeAnyway()
+
+            if(result.isSuccess) {
+              promise.setValue(
+                GoodInfo(
+                  GetFileInfo(tmpFile, result.responseHeaders.getEx(PithosHeaderKeys.Standard.Content_Type))
+                )
+              )
+            }
+            else {
+              promise.setValue(BadInfo(HttpResponseStatus.valueOf(result.statusCode)))
+            }
+
+          case Failure(t) ⇒
+            tmpFileOut.closeAnyway()
+            promise.setException(t)
         }
-        else {
-          promise.setException(new Exception(s"Original response: ${result.statusCode} ${result.statusText}"))
+
+        promise.transform {
+          case Return(GoodInfo(GetFileInfo(file, contentType))) ⇒
+            val size = file.length()
+            val uri = request.uri
+            val parentURI = uri.parentUri
+            val isTextPlain = contentType == "text/plain"
+            val value = if(isTextPlain) new String(Files.readAllBytes(file.toPath), "UTF-8") else Base64.encodeFile(file)
+            val valuetransferencoding = if(isTextPlain) "utf-8" else "base64"
+
+            val container = DataObjectModel(
+              objectID = uri,
+              objectName = uri,
+              parentURI = parentURI,
+              parentID = parentURI,
+              domainURI = "",
+              mimetype = contentType,
+              metadata = Map(StorageSystemMetadata.cdmi_size.name() → size.toString),
+              valuetransferencoding = valuetransferencoding,
+              valuerange = s"0-${size - 1}",
+              value = value
+            )
+            val jsonContainer = Json.objectToJsonString(container)
+            file.deleteAnyway()
+            bodyToFutureResponse(request, Status.Ok, jsonContainer)
+
+          case Return(BadInfo(status, extraInfo)) ⇒
+            bodyToFutureResponse(request, status, extraInfo)
+
+          case Throw(t) ⇒
+            t.printStackTrace(System.err)
+            bodyToFutureResponse(request, Status.InternalServerError, t.toString)
         }
-
-      case Failure(t) ⇒
-        tmpFileOut.closeAnyway()
-        promise.setException(t)
-    }
-
-    promise.transform {
-      case Return(GetFileInfo(file, contentType)) ⇒
-        val size = file.length()
-        val uri = request.uri
-        val parentURI = uri.substring(0, uri.noTrailingSlash.lastIndexOf('/') + 1)
-        val base64Value = Base64.encodeFile(file)
-
-        val container = DataObjectModel(
-          objectID = uri,
-          objectName = uri,
-          parentURI = parentURI,
-          parentID = parentURI,
-          domainURI = "",
-          mimetype = contentType,
-          metadata = Map(StorageSystemMetadata.cdmi_size.name() → size.toString),
-          valuetransferencoding = "base64",
-          valuerange = s"0-${size - 1}",
-          value = base64Value
-        )
-        val jsonContainer = Json.objectToJsonString(container)
-        file.deleteAnyway()
-        bodyToFutureResponse(request, Status.Ok, jsonContainer)
-
-      case Throw(t) ⇒
-        t.printStackTrace(System.err)
-        bodyToFutureResponse(request, Status.InternalServerError, t.toString)
     }
   }
 
