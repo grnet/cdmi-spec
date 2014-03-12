@@ -33,25 +33,21 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.service
-
-import gr.grnet.cdmi.api.CdmiApi
-import gr.grnet.cdmi.model.ContainerModel
-import gr.grnet.common.http.Result
-import gr.grnet.common.keymap.KeyMap
-import gr.grnet.pithosj.api.SingleServicePithosApi
-import scala.concurrent.Future
+package gr.grnet
 
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-class PithosCdmi(pithos: SingleServicePithosApi) extends CdmiApi {
-  def createCDMIDataObject(containers: String, name: String, jsonPayload: String): Future[Result] = ???
-
-  def createDataObject(containers: String, name: String, payload: String): Future[Result] = ???
-
-  def readCDMIDataObject(containers: String, name: String, fields: KeyMap): Future[Result] = ???
-
-  override def listContainer(container: String): Future[ContainerModel] = ???
+package object cdmi {
+  final val Banner =
+    """
+      |         _           _
+      |        | |         (_)
+      |  ___ __| |_ __ ___  _
+      | / __/ _` | '_ ` _ \| |
+      || (_| (_| | | | | | | |
+      | \___\__,_|_| |_| |_|_|
+      |
+    """.stripMargin
 }

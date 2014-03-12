@@ -33,25 +33,17 @@
  * or implied, of GRNET S.A.
  */
 
-package gr.grnet.cdmi.service
+package gr.grnet.cdmi
 
-import gr.grnet.cdmi.api.CdmiApi
-import gr.grnet.cdmi.model.ContainerModel
-import gr.grnet.common.http.Result
-import gr.grnet.common.keymap.KeyMap
-import gr.grnet.pithosj.api.SingleServicePithosApi
-import scala.concurrent.Future
+import com.twitter.finagle.http.Response
+import com.twitter.util.Future
 
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-class PithosCdmi(pithos: SingleServicePithosApi) extends CdmiApi {
-  def createCDMIDataObject(containers: String, name: String, jsonPayload: String): Future[Result] = ???
-
-  def createDataObject(containers: String, name: String, payload: String): Future[Result] = ???
-
-  def readCDMIDataObject(containers: String, name: String, fields: KeyMap): Future[Result] = ???
-
-  override def listContainer(container: String): Future[ContainerModel] = ???
+package object service {
+  implicit class FinagleResponseToFuture(val response: Response) extends AnyVal {
+    final def future: Future[Response] = Future.value(response)
+  }
 }
