@@ -41,8 +41,8 @@ import gr.grnet.cdmi.http.CdmiContentType
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-case class DataObjectModel(
-  objectType: String = CdmiContentType.Application_CdmiData.contentType(),
+case class ObjectModel(
+  objectType: String = CdmiContentType.Application_CdmiObject.contentType(),
   objectID: String,
   objectName: String,
   parentURI: String,

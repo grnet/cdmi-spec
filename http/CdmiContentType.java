@@ -47,7 +47,7 @@ public enum CdmiContentType implements IContentType {
     Application_CdmiCapability("application/cdmi-capability"),
     Application_CdmiDomain("application/vnd.org.snia.cdmi-object"),
     Application_CdmiContainer("application/cdmi-container"),
-    Application_CdmiData("application/cdmi-object");
+    Application_CdmiObject("application/cdmi-object");
 
     private final String contentType;
 
