@@ -42,6 +42,7 @@ import com.twitter.server.TwitterServer
 import com.twitter.util.{Return, Throw, Promise, Future}
 import gr.grnet.cdmi.metadata.StorageSystemMetadata
 import gr.grnet.cdmi.model.{ObjectModel, Model, ContainerModel}
+import gr.grnet.common.http.StdHeader
 import gr.grnet.common.io.{Base64, CloseAnyway, DeleteAnyway}
 import gr.grnet.common.json.Json
 import gr.grnet.common.text.{ParentUri, RemovePrefix}
@@ -57,9 +58,11 @@ import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success}
 
-object pithosURL   extends GlobalFlag[String]("https://pithos.okeanos.grnet.gr/object-store/v1", "Pithos service URL")
-object pithosUUID  extends GlobalFlag[String]("", "Pithos (Astakos) UUID. Usually set for debugging")
-object pithosToken extends GlobalFlag[String]("", "Pithos (Astakos) UUID. Set this only for debugging")
+object pithosURL    extends GlobalFlag[String] ("https://pithos.okeanos.grnet.gr/object-store/v1", "Pithos service URL")
+object pithosUUID   extends GlobalFlag[String] ("", "Pithos (Astakos) UUID. Usually set for debugging")
+object pithosToken  extends GlobalFlag[String] ("", "Pithos (Astakos) UUID. Set this only for debugging")
+object authURL      extends GlobalFlag[String] ("https://okeanos-occi.hellasgrid.gr:5000/main", "auth proxy")
+object authRedirect extends GlobalFlag[Boolean](true, "Redirect to 'authURL' if token is not present (in an attempt to get one)")
 
 /**
  *
@@ -122,6 +125,32 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
     )
   }
 
+  val occiAuthFilter = new Filter {
+    def authenticate(request: Request): Future[Response] = {
+      val response = request.response
+      val rh = response.headers()
+      rh.set(StdHeader.Content_Type.headerName(), "text/html")
+      rh.set(StdHeader.WWW_Authenticate.headerName(), s"snf-auth uri='${authURL()}'")
+
+      response.future
+    }
+
+    override def apply(request: Request, service: Service): Future[Response] = {
+      if(!authRedirect()) {
+        return service(request)
+      }
+
+      // If we do not have the X-Auth-Token header present, then we need to send the user for authentication
+      getPithosToken(request) match {
+        case null ⇒
+          authenticate(request)
+
+        case _ ⇒
+          service(request)
+      }
+    }
+  }
+
   val pithosHeadersFilter = new Filter {
     override def apply(request: Request, service: Service): Future[Response] = {
       // Pithos header check is needed only for URIs that result in calling Pithos
@@ -159,10 +188,10 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
     }
   }
 
-  val myFilters = Vector(pithosHeadersFilter)
+  val myFilters = Vector(occiAuthFilter, pithosHeadersFilter)
   override def mainFilters = super.mainFilters ++ myFilters
 
-  override def flags: Seq[GlobalFlag[_]] = super.flags ++ Seq(pithosURL, pithosUUID)
+  override def flags: Seq[GlobalFlag[_]] = super.flags ++ Seq(pithosURL, pithosUUID, authURL, authRedirect)
 
   def newResultPromise[T]: Promise[PithosResult[T]] = Promise[PithosResult[T]]()
 

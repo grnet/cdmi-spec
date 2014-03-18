@@ -160,7 +160,7 @@ trait CdmiRestService {
     }
 
 
-    final val DoubleSlashTolerator = new Filter {
+    final val DoubleSlashCheck = new Filter {
       override def apply(request: Request, service: Service): Future[Response] = {
         val uri = request.uri
 
@@ -177,7 +177,7 @@ trait CdmiRestService {
       }
     }
 
-    final val CheckCdmiVersionHeader = new Filter {
+    final val CdmiVersionHeaderCheck = new Filter {
       override def apply(request: Request, service: Service): Future[Response] = {
         request.headers().get(Headers.X_CDMI_Specification_Version) match {
           case null ⇒
@@ -370,8 +370,8 @@ trait CdmiRestService {
   def mainFilters: Vector[Filter] =
     Vector(
       Filters.RogueExceptionHandler,
-      Filters.DoubleSlashTolerator,
-      Filters.CheckCdmiVersionHeader
+      Filters.DoubleSlashCheck,
+      Filters.CdmiVersionHeaderCheck
     )
 
   val nettyToFinagle =
