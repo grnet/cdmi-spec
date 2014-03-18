@@ -60,7 +60,7 @@ import scala.util.{Failure, Success}
 
 object pithosURL    extends GlobalFlag[String] ("https://pithos.okeanos.grnet.gr/object-store/v1", "Pithos service URL")
 object pithosUUID   extends GlobalFlag[String] ("", "Pithos (Astakos) UUID. Usually set for debugging")
-object pithosToken  extends GlobalFlag[String] ("", "Pithos (Astakos) UUID. Set this only for debugging")
+object pithosToken  extends GlobalFlag[String] ("", "Pithos (Astakos) Token. Set this only for debugging")
 object authURL      extends GlobalFlag[String] ("https://okeanos-occi.hellasgrid.gr:5000/main", "auth proxy")
 object authRedirect extends GlobalFlag[Boolean](true, "Redirect to 'authURL' if token is not present (in an attempt to get one)")
 
