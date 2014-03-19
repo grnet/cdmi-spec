@@ -37,7 +37,9 @@ package gr.grnet.cdmi.service
 
 import com.twitter.app.GlobalFlag
 import com.twitter.finagle.http.{Status, Method}
-import com.twitter.finagle.{Filter, Http}
+import com.twitter.finagle.netty3.{Netty3Listener, Netty3ListenerTLSConfig}
+import com.twitter.finagle.ssl.Ssl
+import com.twitter.finagle.{ServerCodecConfig, http, Filter, Http}
 import com.twitter.logging.Logger
 import com.twitter.util.{FutureTransformer, Await, Future}
 import gr.grnet.cdmi.http.{CdmiContentType, CdmiHeader}
@@ -45,16 +47,24 @@ import gr.grnet.cdmi.model.CapabilityModel
 import gr.grnet.common.http.StdHeader
 import gr.grnet.common.json.Json
 import gr.grnet.common.text.{UriToList, NormalizeUri}
-import java.net.{URLDecoder, InetSocketAddress}
+import java.io.File
+import java.net.{SocketAddress, URLDecoder, InetSocketAddress}
 import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
 import org.jboss.netty.handler.codec.http.{HttpVersion, HttpResponse, HttpRequest, HttpMethod, HttpResponseStatus, DefaultHttpResponse}
 import org.jboss.netty.util.CharsetUtil.UTF_8
 import scala.collection.immutable.Seq
+import com.twitter.finagle.server.DefaultServer
+import com.twitter.finagle.dispatch.SerialServerDispatcher
+import com.twitter.conversions.storage.intToStorageUnitableWholeNumber
 
 object port          extends GlobalFlag[InetSocketAddress](new InetSocketAddress(8080), "http port")
 object dev           extends GlobalFlag[Boolean](false, "enable development mode")
 object pithosTimeout extends GlobalFlag[Long](1000L * 60L * 3L /* 3 min*/, "millis to wait for Pithos response")
 object tolerateDoubleSlash extends GlobalFlag[Boolean](false, "Tolerate // in URIs. If true, will collapse them to /")
+object maxRequestSize  extends GlobalFlag[Int](10, "Max request size (MB)")
+object sslPort       extends GlobalFlag[InetSocketAddress](new InetSocketAddress(443), "https port")
+object sslCertPath   extends GlobalFlag[String]("", "SSL certificate path")
+object sslKeyPath    extends GlobalFlag[String]("", "SSL key path")
 
 /**
  *
@@ -84,7 +94,16 @@ trait CdmiRestService {
 
   def supportedCdmiVersions: Set[String] = Set("1.0.2")
 
-  def flags: Seq[GlobalFlag[_]] = Seq(port, dev, pithosTimeout, tolerateDoubleSlash)
+  def flags: Seq[GlobalFlag[_]] = Seq(
+    port,
+    dev,
+    pithosTimeout,
+    tolerateDoubleSlash,
+    maxRequestSize,
+    sslPort,
+    sslCertPath,
+    sslKeyPath
+  )
 
   def response(
     request: Request,
@@ -379,16 +398,71 @@ trait CdmiRestService {
       service(Request(req)) map { _.httpResponse }
     }
 
+  def haveSslCertPath =
+    sslCertPath() match {
+      case null ⇒ false
+      case s if s.isEmpty ⇒ false
+      case _ ⇒ true
+    }
+
+  def haveSslKeyPath =
+    sslKeyPath() match {
+      case null ⇒ false
+      case s if s.isEmpty ⇒ false
+      case _ ⇒ true
+    }
+
   def main(): Unit = {
     printBanner()
     logFlags()
 
     val service = (mainFilters :\ mainService) { (filter, service) ⇒ filter andThen service }
-    val server = Http.serve(
-      port(),
-      nettyToFinagle andThen service
-    )
 
-    Await.ready(server)
+    (haveSslCertPath, haveSslKeyPath) match {
+      case (false, false) ⇒
+        // No SSL. Just start an http server
+        log.info("Starting HTTP server on " + port().getPort)
+        val server = Http.serve(
+          port(),
+          nettyToFinagle andThen service
+        )
+
+        Await.ready(server)
+
+      case (_, false) | (false, _) ⇒
+        System.err.println(s"You specified only one of ${sslCertPath.name}, ${sslKeyPath.name}. Either omit them both or given them values")
+        sys.exit(3)
+
+      case (true, true) ⇒
+        val certFile = new File(sslCertPath())
+        val certFileOK = certFile.isFile && certFile.canRead
+        if(!certFileOK) {
+          System.err.println("SSL certificate not found")
+          sys.exit(1)
+        }
+
+        val keyFile = new File(sslKeyPath())
+        val keyFileOK = keyFile.isFile && keyFile.canRead
+        if(!keyFileOK) {
+          System.err.println("SSL key not found")
+          sys.exit(2)
+        }
+
+        val codec = {
+          http.Http()
+            .maxRequestSize(maxRequestSize().megabytes)
+            .server(ServerCodecConfig("cdmi", new SocketAddress{}))
+            .pipelineFactory
+        }
+        val tlsConfig = Some(Netty3ListenerTLSConfig(() => Ssl.server(sslCertPath(), sslKeyPath(), null, null, null)))
+        object HttpsListener extends Netty3Listener[HttpResponse, HttpRequest]("https", codec, tlsConfig = tlsConfig)
+        object Https extends DefaultServer[HttpRequest, HttpResponse, HttpResponse, HttpRequest](
+          "https", HttpsListener, new SerialServerDispatcher(_, _)
+        )
+
+        log.info("Starting HTTPS server on " + sslPort().getPort)
+        val server = Https.serve(sslPort(), nettyToFinagle andThen service)
+        Await.ready(server)
+    }
   }
 }
