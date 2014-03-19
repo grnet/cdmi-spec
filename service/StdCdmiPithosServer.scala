@@ -35,6 +35,8 @@
 
 package gr.grnet.cdmi.service
 
+import com.ning.http.client
+import com.ning.http.client.{AsyncCompletionHandler, AsyncHttpClient}
 import com.twitter.app.GlobalFlag
 import com.twitter.finagle.http.Status
 import com.twitter.logging.Level
@@ -42,7 +44,7 @@ import com.twitter.server.TwitterServer
 import com.twitter.util.{Return, Throw, Promise, Future}
 import gr.grnet.cdmi.metadata.StorageSystemMetadata
 import gr.grnet.cdmi.model.{ObjectModel, Model, ContainerModel}
-import gr.grnet.common.http.StdHeader
+import gr.grnet.common.http.{StdContentType, StdHeader}
 import gr.grnet.common.io.{Base64, CloseAnyway, DeleteAnyway}
 import gr.grnet.common.json.Json
 import gr.grnet.common.text.{ParentUri, RemovePrefix}
@@ -63,6 +65,7 @@ object pithosUUID   extends GlobalFlag[String] ("", "Pithos (Astakos) UUID. Usua
 object pithosToken  extends GlobalFlag[String] ("", "Pithos (Astakos) Token. Set this only for debugging")
 object authURL      extends GlobalFlag[String] ("https://okeanos-occi.hellasgrid.gr:5000/main", "auth proxy")
 object authRedirect extends GlobalFlag[Boolean](true, "Redirect to 'authURL' if token is not present (in an attempt to get one)")
+object tokensURL    extends GlobalFlag[String]("https://accounts.okeanos.grnet.gr/identity/v2.0/tokens", "Used to obtain UUID from token")
 
 /**
  *
@@ -77,7 +80,8 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
 
   override def defaultLogLevel: Level = Level.DEBUG
 
-  val pithos: PithosApi = PithosClientFactory.newPithosClient()
+  val asyncHttp: AsyncHttpClient = PithosClientFactory.newDefaultAsyncHttpClient
+  val pithos: PithosApi = PithosClientFactory.newPithosClient(asyncHttp)
 
   def getPithosURL(request: Request): String = {
     val headers = request.headers()
@@ -125,7 +129,7 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
     )
   }
 
-  val occiAuthFilter = new Filter {
+  val authFilter = new Filter {
     def authenticate(request: Request): Future[Response] = {
       val response = request.response
       val rh = response.headers()
@@ -136,14 +140,96 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
     }
 
     override def apply(request: Request, service: Service): Future[Response] = {
-      if(!authRedirect()) {
-        return service(request)
-      }
-
       // If we do not have the X-Auth-Token header present, then we need to send the user for authentication
       getPithosToken(request) match {
-        case null ⇒
+        case null if authRedirect() ⇒
           authenticate(request)
+
+        case _ ⇒
+          service(request)
+      }
+    }
+  }
+
+  val uuidCheck = new Filter {
+    // http://www.synnefo.org/docs/synnefo/latest/identity-api-guide.html#tokens-api-operations
+    def postTokens(request: Request): Future[PithosResult[String]] = {
+      val jsonTemplate = """{ "auth": { "token": { "id": "%s" } } }"""
+      val token = getPithosToken(request)
+      val jsonPayload = jsonTemplate.format(token)
+
+      val promise = newResultPromise[String]
+
+      val reqBuilder = asyncHttp.preparePost(tokensURL())
+      reqBuilder.setHeader(StdHeader.Content_Type.headerName(), StdContentType.Application_Json.contentType())
+      reqBuilder.setBody(jsonPayload)
+      val handler = new AsyncCompletionHandler[Unit] {
+        override def onThrowable(t: Throwable): Unit =
+          promise.setException(t)
+
+        override def onCompleted(response: client.Response): Unit = {
+          val statusCode = response.getStatusCode
+          val statusText = response.getStatusText
+
+          statusCode match {
+            case 200 ⇒
+              val body = response.getResponseBody
+              promise.setValue(GoodPithosResult(body))
+
+            case _ ⇒
+              promise.setValue(BadPithosResult(new HttpResponseStatus(statusCode, statusText)))
+          }
+        }
+      }
+      reqBuilder.execute(handler)
+
+      promise
+    }
+
+    override def apply(request: Request, service: Service): Future[Response] = {
+      getPithosUUID(request) match {
+        case null if getPithosToken(request) ne null ⇒
+          postTokens(request).transform {
+            case Return(GoodPithosResult(jsonResponse)) ⇒
+              val jsonTree = Json.jsonStringToTree(jsonResponse)
+
+              if(jsonTree.has("access")) {
+                val accessTree = jsonTree.get("access")
+                if(accessTree.has("token")) {
+                  val tokenTree = accessTree.get("token")
+                  if(tokenTree.has("tenant")) {
+                    val tenantTree = tokenTree.get("tenant")
+                    if(tenantTree.has("id")) {
+                      val idTree = tenantTree.get("id")
+                      if(idTree.isTextual) {
+                        val uuid = idTree.asText()
+                        request.headers().set("X-Pithos-UUID", uuid)
+                        log.info(s"Derived X-Pithos-UUID: ${uuid}")
+                      }
+                    }
+                  }
+                }
+              }
+
+              getPithosUUID(request) match {
+                case null ⇒
+                  // still not found
+                  internalServerError(request, new Exception(s"Could not retrieve UUID from ${tokensURL()}"))
+                case _ ⇒
+                  service(request)
+              }
+
+            case Return(BadPithosResult(status, extraInfo)) ⇒
+              response(request, status, extraInfo, "BadPithosResult").future
+
+            case Throw(t) ⇒
+              log.error(s"Calling ${tokensURL()}")
+              internalServerError(request, t)
+          }
+
+        case uuid if uuid ne null ⇒
+          log.info(s"Given X-Pithos-UUID: ${uuid}")
+          service(request)
 
         case _ ⇒
           service(request)
@@ -188,10 +274,10 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
     }
   }
 
-  val myFilters = Vector(occiAuthFilter, pithosHeadersFilter)
+  val myFilters = Vector(authFilter, uuidCheck, pithosHeadersFilter)
   override def mainFilters = super.mainFilters ++ myFilters
 
-  override def flags: Seq[GlobalFlag[_]] = super.flags ++ Seq(pithosURL, pithosUUID, authURL, authRedirect)
+  override def flags: Seq[GlobalFlag[_]] = super.flags ++ Seq(pithosURL, pithosUUID, authURL, authRedirect, tokensURL)
 
   def newResultPromise[T]: Promise[PithosResult[T]] = Promise[PithosResult[T]]()
 
