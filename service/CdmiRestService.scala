@@ -44,7 +44,7 @@ import com.twitter.logging.Logger
 import com.twitter.util.{FutureTransformer, Await, Future}
 import gr.grnet.cdmi.http.{CdmiContentType, CdmiHeader}
 import gr.grnet.cdmi.model.CapabilityModel
-import gr.grnet.common.http.StdHeader
+import gr.grnet.common.http.{StdContentType, IContentType, StdHeader}
 import gr.grnet.common.json.Json
 import gr.grnet.common.text.{UriToList, NormalizeUri}
 import java.io.File
@@ -94,6 +94,11 @@ trait CdmiRestService {
 
   def supportedCdmiVersions: Set[String] = Set("1.0.2")
 
+  /**
+   * The CDMI version we report back to an HTTP response.
+   */
+  def currentCdmiVersion: String = "1.0.2"
+
   def flags: Seq[GlobalFlag[_]] = Seq(
     port,
     dev,
@@ -109,10 +114,18 @@ trait CdmiRestService {
     request: Request,
     status: HttpResponseStatus = Status.Ok,
     body: CharSequence = "",
-    devbody: CharSequence = ""
+    devbody: CharSequence = "",
+    contentType: IContentType = StdContentType.Application_Json
   ): Response = {
-    val response = new DefaultHttpResponse(request.getProtocolVersion(), status)
-    response.setContent(copiedBuffer(body, UTF_8))
+    val httpResponse = new DefaultHttpResponse(request.getProtocolVersion(), status)
+    val response = Response(httpResponse)
+
+    response.headers().set(CdmiHeader.X_CDMI_Specification_Version.headerName(), currentCdmiVersion)
+
+    val bodyChannelBuffer = copiedBuffer(body, UTF_8)
+    response.contentType = contentType.contentType()
+    response.contentLength = bodyChannelBuffer.readableBytes()
+    response.content = bodyChannelBuffer
 
     if(dev()) {
       val buffer = new java.lang.StringBuilder
@@ -146,12 +159,12 @@ trait CdmiRestService {
       log.info(buffer.toString)
     }
 
-    Response(response)
+    response
   }
 
   def internalServerError(request: Request, t: Throwable): Future[Response] = {
     log.error(t, t.toString)
-    response(request, Status.InternalServerError, t.toString).future
+    response(request, Status.InternalServerError, t.toString, "", StdContentType.Plain_Text).future
   }
 
   object Headers {
