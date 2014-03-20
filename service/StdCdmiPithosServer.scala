@@ -37,10 +37,10 @@ package gr.grnet.cdmi.service
 
 import com.ning.http.client
 import com.ning.http.client.{AsyncCompletionHandler, AsyncHttpClient}
+import com.twitter.app.App
 import com.twitter.app.GlobalFlag
 import com.twitter.finagle.http.Status
-import com.twitter.logging.Level
-import com.twitter.server.TwitterServer
+import com.twitter.logging.{Logging, Level}
 import com.twitter.util.{Return, Throw, Promise, Future}
 import gr.grnet.cdmi.metadata.StorageSystemMetadata
 import gr.grnet.cdmi.model.{ObjectModel, Model, ContainerModel}
@@ -71,7 +71,7 @@ object tokensURL    extends GlobalFlag[String]("https://accounts.okeanos.grnet.g
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
+object StdCdmiPithosServer extends CdmiRestService with App with Logging {
   sealed trait PithosResult[+T]
   final case class GoodPithosResult[T](value: T) extends PithosResult[T]
   final case class BadPithosResult(status: HttpResponseStatus, extraInfo: String = "") extends PithosResult[Nothing]
@@ -143,7 +143,7 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
       if(isCdmiCapabilitiesUri(request.uri)) {
         return service(request)
       }
-      
+
       // If we do not have the X-Auth-Token header present, then we need to send the user for authentication
       getPithosToken(request) match {
         case null if authRedirect() ⇒
