@@ -132,9 +132,11 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
   val authFilter = new Filter {
     def authenticate(request: Request): Future[Response] = {
       val response = request.response
+      response.status = Status.Unauthorized
       val rh = response.headers()
       rh.set(StdHeader.Content_Type.headerName(), StdContentType.Text_Html.contentType())
       rh.set(StdHeader.WWW_Authenticate.headerName(), s"snf-auth uri='${authURL()}'")
+      rh.set(StdHeader.Content_Length.headerName(), "0")
 
       response.future
     }
