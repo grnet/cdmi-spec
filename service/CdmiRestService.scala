@@ -120,7 +120,7 @@ trait CdmiRestService {
     val httpResponse = new DefaultHttpResponse(request.getProtocolVersion(), status)
     val response = Response(httpResponse)
 
-    response.headers().set(CdmiHeader.X_CDMI_Specification_Version.headerName(), currentCdmiVersion)
+    response.headers().set(Headers.X_CDMI_Specification_Version, currentCdmiVersion)
 
     val bodyChannelBuffer = copiedBuffer(body, UTF_8)
     response.contentType = contentType.contentType()
@@ -164,7 +164,7 @@ trait CdmiRestService {
 
   def internalServerError(request: Request, t: Throwable): Future[Response] = {
     log.error(t, t.toString)
-    response(request, Status.InternalServerError, t.toString, "", StdContentType.Plain_Text).future
+    response(request, Status.InternalServerError, t.toString, "", StdContentType.Text_Plain).future
   }
 
   object Headers {

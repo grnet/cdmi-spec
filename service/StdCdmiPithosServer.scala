@@ -133,13 +133,17 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
     def authenticate(request: Request): Future[Response] = {
       val response = request.response
       val rh = response.headers()
-      rh.set(StdHeader.Content_Type.headerName(), "text/html")
+      rh.set(StdHeader.Content_Type.headerName(), StdContentType.Text_Html.contentType())
       rh.set(StdHeader.WWW_Authenticate.headerName(), s"snf-auth uri='${authURL()}'")
 
       response.future
     }
 
     override def apply(request: Request, service: Service): Future[Response] = {
+      if(isCdmiCapabilitiesUri(request.uri)) {
+        return service(request)
+      }
+      
       // If we do not have the X-Auth-Token header present, then we need to send the user for authentication
       getPithosToken(request) match {
         case null if authRedirect() ⇒
@@ -151,12 +155,14 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
     }
   }
 
+  val postTokensJsonFmt = """{ "auth": { "token": { "id": "%s" } } }"""
+
   val uuidCheck = new Filter {
     // http://www.synnefo.org/docs/synnefo/latest/identity-api-guide.html#tokens-api-operations
     def postTokens(request: Request): Future[PithosResult[String]] = {
-      val jsonTemplate = """{ "auth": { "token": { "id": "%s" } } }"""
+      val jsonFmt = postTokensJsonFmt
       val token = getPithosToken(request)
-      val jsonPayload = jsonTemplate.format(token)
+      val jsonPayload = jsonFmt.format(token)
 
       val promise = newResultPromise[String]
 
@@ -187,6 +193,10 @@ object StdCdmiPithosServer extends CdmiRestService with TwitterServer {
     }
 
     override def apply(request: Request, service: Service): Future[Response] = {
+      if(isCdmiCapabilitiesUri(request.uri)) {
+        return service(request)
+      }
+
       getPithosUUID(request) match {
         case null if getPithosToken(request) ne null ⇒
           postTokens(request).transform {
