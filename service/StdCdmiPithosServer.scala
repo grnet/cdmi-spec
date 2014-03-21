@@ -50,7 +50,7 @@ import gr.grnet.common.json.Json
 import gr.grnet.common.text.{ParentUri, RemovePrefix, NoTrailingSlash}
 import gr.grnet.pithosj.api.PithosApi
 import gr.grnet.pithosj.core.ServiceInfo
-import gr.grnet.pithosj.core.keymap.{PithosHeaderKeys, PithosResultKeys}
+import gr.grnet.pithosj.core.keymap.PithosHeaderKeys
 import gr.grnet.pithosj.impl.asynchttp.PithosClientFactory
 import java.io.{FileOutputStream, File}
 import java.nio.file.Files
@@ -682,6 +682,45 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
   }
 
 
+  /**
+   * Create a data object in a container using non-CDMI content type.
+   * The given `contentType` is guaranteed to be not null.
+   */
+  override def PUT_object_noncdmi(
+    request: Request, objectPath: List[String], contentType: String
+  ): Future[Response] = {
+
+    val serviceInfo = getPithosServiceInfo(request)
+    val promise = newResultPromise[Unit]
+    val container = objectPath.head
+    val path = objectPath.tail.mkString("/")
+
+    val payload = request.getContent()
+    val sf_result = pithos.putObject(serviceInfo, container, path, payload, contentType)
+    sf_result.onComplete {
+      case Success(result) ⇒
+        if(result.isSuccess) {
+          promise.setValue(GoodPithosResult(()))
+        }
+        else {
+          promise.setValue(BadPithosResult(HttpResponseStatus.valueOf(result.statusCode)))
+        }
+
+      case Failure(t) ⇒
+        promise.setException(t)
+    }
+
+    promise.transform {
+      case Return(GoodPithosResult(_)) ⇒
+        response(request, Status.Ok).future
+
+      case Return(BadPithosResult(status, extraInfo)) ⇒
+        response(request, status, extraInfo, "BadPithosResult").future
+
+      case Throw(t) ⇒
+        internalServerError(request, t)
+    }
+  }
 
   /**
    * Delete a data object (file).
