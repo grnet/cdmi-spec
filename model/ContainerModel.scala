@@ -36,6 +36,7 @@
 package gr.grnet.cdmi.model
 
 import gr.grnet.cdmi.http.CdmiContentType
+import scala.collection.immutable.Seq
 
 /**
  *
@@ -52,5 +53,5 @@ case class ContainerModel(
   completionStatus: String = "Complete",
   metadata: Map[String, String] = Map(),
   childrenrange: String,
-  children: List[String]
+  children: Seq[String]
 )
