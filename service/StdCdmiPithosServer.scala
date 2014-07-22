@@ -418,7 +418,22 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
 
     promise.transform {
       case Return(GoodPithosResult(_)) ⇒
-        response(request, Status.Ok).future
+
+        val uri = request.uri
+        val parentURI = uri.parentUri
+        val children = Seq()
+
+        val container = ContainerModel(
+          objectID = uri,
+          objectName = uri,
+          parentURI = parentURI,
+          parentID = parentURI,
+          domainURI = "",
+          childrenrange = Model.childrenRangeOf(children),
+          children = children
+        )
+        val jsonContainer = Json.objectToJsonString(container)
+        response(request, Status.Ok, jsonContainer).future
 
       case Return(BadPithosResult(status, extraInfo)) ⇒
         response(request, status, extraInfo, "BadPithosResult").future
