@@ -42,6 +42,7 @@ import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success}
 
+object pithosTimeout extends GlobalFlag[Long](1000L * 60L * 3L /* 3 min*/, "millis to wait for Pithos response")
 object pithosURL    extends GlobalFlag[String] ("https://pithos.okeanos.grnet.gr/object-store/v1", "Pithos service URL")
 object pithosUUID   extends GlobalFlag[String] ("", "Pithos (Astakos) UUID. Usually set for debugging")
 object pithosToken  extends GlobalFlag[String] ("", "Pithos (Astakos) Token. Set this only for debugging")
@@ -272,7 +273,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
   val myFilters = Vector(authFilter, uuidCheck, pithosHeadersFilter)
   override def mainFilters = super.mainFilters ++ myFilters
 
-  override def flags: Seq[GlobalFlag[_]] = super.flags ++ Seq(pithosURL, pithosUUID, authURL, authRedirect, tokensURL)
+  override def flags: Seq[GlobalFlag[_]] = super.flags ++ Seq(pithosTimeout, pithosURL, pithosUUID, authURL, authRedirect, tokensURL)
 
   def newResultPromise[T]: Promise[PithosResult[T]] = Promise[PithosResult[T]]()
 

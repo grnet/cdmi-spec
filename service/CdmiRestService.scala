@@ -41,7 +41,6 @@ import com.twitter.conversions.storage.intToStorageUnitableWholeNumber
 
 object port          extends GlobalFlag[InetSocketAddress](new InetSocketAddress(8080), "http port")
 object dev           extends GlobalFlag[Boolean](false, "enable development mode")
-object pithosTimeout extends GlobalFlag[Long](1000L * 60L * 3L /* 3 min*/, "millis to wait for Pithos response")
 object tolerateDoubleSlash extends GlobalFlag[Boolean](false, "Tolerate // in URIs. If true, will collapse them to /")
 object maxRequestSize  extends GlobalFlag[Int](10, "Max request size (MB)")
 object sslPort       extends GlobalFlag[InetSocketAddress](new InetSocketAddress(443), "https port")
@@ -84,7 +83,6 @@ trait CdmiRestService {
   def flags: Seq[GlobalFlag[_]] = Seq(
     port,
     dev,
-    pithosTimeout,
     tolerateDoubleSlash,
     maxRequestSize,
     sslPort,
