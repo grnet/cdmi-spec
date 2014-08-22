@@ -28,7 +28,7 @@ import gr.grnet.cdmi.http.{CdmiContentType, CdmiHeader}
 import gr.grnet.cdmi.model.CapabilityModel
 import gr.grnet.common.http.{StdContentType, IContentType, StdHeader}
 import gr.grnet.common.json.Json
-import gr.grnet.common.text.{UriToList, NormalizeUri}
+import gr.grnet.common.text.{PathToList, NormalizePath}
 import java.io.File
 import java.net.{SocketAddress, URLDecoder, InetSocketAddress}
 import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
@@ -63,7 +63,7 @@ trait CdmiRestService {
   def isToleratingDoubleSlash = tolerateDoubleSlash()
 
   def isCdmiCapabilitiesUri(uri: String): Boolean = {
-    val uriToCheck = if(isToleratingDoubleSlash) uri.normalizeUri else uri
+    val uriToCheck = if(isToleratingDoubleSlash) uri.normalizePath else uri
     uriToCheck == "/cdmi_capabilities/"
   }
 
@@ -116,7 +116,7 @@ trait CdmiRestService {
 
       val method = request.method
       val uri = request.uri
-      val decodedUri = try URLDecoder.decode(uri, "UTF-8") catch { case e: Exception ⇒ s"(${e.getMessage}) ${uri}"}
+      val decodedUri = try URLDecoder.decode(uri, "UTF-8") catch { case e: Exception ⇒ s"(${e.getMessage}) $uri"}
 
       buffer.append('\n')
       buffer.append(method.getName)
@@ -297,7 +297,10 @@ trait CdmiRestService {
   def routingTable: PartialFunction[Request, Future[Response]] = {
     case request ⇒
       val method = request.method
-      val normalizedUri = request.uri.normalizeUri
+      val uri = request.uri
+      val requestPath = request.path
+      val requestParams = request.params
+      val normalizedPath = requestPath.normalizePath
 
       val getObjectByIdPF: (HttpMethod, List[String]) ⇒ Future[Response] =
         (method, objectIdPath) ⇒ method match {
@@ -307,14 +310,15 @@ trait CdmiRestService {
           case _           ⇒ response(request, Status.MethodNotAllowed).future
         }
 
-      log.debug(method.getName + " " + normalizedUri)
-      val uriList = normalizedUri.uriToList
-      val lastSlash = normalizedUri(normalizedUri.length - 1) == '/'
-      log.debug(method.getName + " " + uriList.map(s ⇒ "\"" + s + "\"").mkString(" ") + (if(lastSlash) " [/]" else ""))
-      val SLASH = true
-      val NOSLASH = false
+      log.debug(s"${method.getName} $uri")
+      val pathElements = normalizedPath.pathToList
+      val lastIsSlash = normalizedPath(normalizedPath.length - 1) == '/'
+      val pathElementsDebugStr = pathElements.map(s ⇒ "\"" + s + "\"").mkString(" ") + (if(lastIsSlash) " [/]" else "")
+      log.debug(s"${method.getName} $pathElementsDebugStr")
+      val IS_SLASH = true
+      val IS_NO_SLASH = false
 
-      (uriList, lastSlash) match {
+      (pathElements, lastIsSlash) match {
         case (Nil, _) ⇒
           // "/"
           response(request, Status.MethodNotAllowed).future
@@ -324,14 +328,14 @@ trait CdmiRestService {
           // ""
           response(request, Status.MethodNotAllowed).future
 
-        case ("" ::  "cdmi_capabilities" :: Nil, SLASH) ⇒
+        case ("" ::  "cdmi_capabilities" :: Nil, IS_SLASH) ⇒
           // "/cdmi_capabilities/"
           method match {
             case Method.Get ⇒ GET_capabilities(request)
             case _ ⇒ response(request, Status.MethodNotAllowed).future
           }
 
-        case ("" ::  "cdmi_capabilities" :: Nil, NOSLASH) ⇒
+        case ("" ::  "cdmi_capabilities" :: Nil, IS_NO_SLASH) ⇒
           // "/cdmi_capabilities"
           // Just being helpful here
           response(
@@ -347,7 +351,7 @@ trait CdmiRestService {
         case ("" :: "cdmi_objectID" :: objectIdPath, _) ⇒
           getObjectByIdPF(method, objectIdPath)
 
-        case ("" :: containerPath, SLASH) ⇒
+        case ("" :: containerPath, IS_SLASH) ⇒
           method match {
             case Method.Get    ⇒ GET_container   (request, containerPath)
             case Method.Put    ⇒ PUT_container   (request, containerPath)
@@ -355,7 +359,7 @@ trait CdmiRestService {
             case _ ⇒ response(request, Status.MethodNotAllowed).future
           }
 
-        case ("" :: objectPath, NOSLASH) ⇒
+        case ("" :: objectPath, IS_NO_SLASH) ⇒
           method match {
             case Method.Get    ⇒ GET_object   (request, objectPath)
             case Method.Put    ⇒ PUT_object   (request, objectPath)

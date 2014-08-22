@@ -29,7 +29,7 @@ import gr.grnet.cdmi.model.{ObjectModel, Model, ContainerModel}
 import gr.grnet.common.http.{StdContentType, StdHeader}
 import gr.grnet.common.io.{Base64, CloseAnyway, DeleteAnyway}
 import gr.grnet.common.json.Json
-import gr.grnet.common.text.{ParentUri, RemovePrefix, NoTrailingSlash}
+import gr.grnet.common.text.{ParentPath, RemovePrefix, NoTrailingSlash}
 import gr.grnet.pithosj.api.PithosApi
 import gr.grnet.pithosj.core.ServiceInfo
 import gr.grnet.pithosj.core.keymap.PithosHeaderKeys
@@ -131,6 +131,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
       // If we do not have the X-Auth-Token header present, then we need to send the user for authentication
       getPithosToken(request) match {
         case null if authRedirect() ⇒
+          log.warning(s"Unauthenticated ${request.method.getName} ${request.uri}")
           authenticate(request)
 
         case _ ⇒
@@ -278,11 +279,11 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
   def fixPathFromContentType(path: String, contentType: String): String =
     contentType match {
       case "application/directory" | "application/folder" ⇒
-        s"${path}/"
+        s"$path/"
 
-      case contentType if contentType.startsWith("application/directory;") ||
-        contentType.startsWith("application/folder;") ⇒
-        s"${path}/"
+      case _ if contentType.startsWith("application/directory;") ||
+                contentType.startsWith("application/folder;") ⇒
+        s"$path/"
 
       case _ ⇒
         path
@@ -311,6 +312,12 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
     }
 
     promise
+  }
+
+  def splitPithosContainerAndPath(objectPath: List[String]): (String, String) = {
+    val container = objectPath.head
+    val path = objectPath.tail.mkString("/")
+    (container, path)
   }
 
   /**
@@ -365,14 +372,14 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
 
         promise.transform {
           case Return(GoodPithosResult(children)) ⇒
-            val uri = request.uri
-            val parentURI = uri.parentUri
+            val requestPath = request.path
+            val parentPath = requestPath.parentPath
 
             val container = ContainerModel(
-              objectID = uri,
-              objectName = uri,
-              parentURI = parentURI,
-              parentID = parentURI,
+              objectID = requestPath,
+              objectName = requestPath,
+              parentURI = parentPath,
+              parentID = parentPath,
               domainURI = "",
               childrenrange = Model.childrenRangeOf(children),
               children = children
@@ -420,15 +427,15 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
     promise.transform {
       case Return(GoodPithosResult(_)) ⇒
 
-        val uri = request.uri
-        val parentURI = uri.parentUri
+        val requestPath = request.uri
+        val parentPath = requestPath.parentPath
         val children = Seq()
 
         val container = ContainerModel(
-          objectID = uri,
-          objectName = uri,
-          parentURI = parentURI,
-          parentID = parentURI,
+          objectID = requestPath,
+          objectName = requestPath,
+          parentURI = parentPath,
+          parentID = parentPath,
           domainURI = "",
           childrenrange = Model.childrenRangeOf(children),
           children = children
@@ -500,8 +507,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
 
     val serviceInfo = getPithosServiceInfo(request)
 
-    val container = objectPath.head
-    val path = objectPath.tail.mkString("/")
+    val (container, path) = splitPithosContainerAndPath(objectPath)
 
     checkExistsPithosFolderOrContainer(serviceInfo, container, path).flatMap {
       case BadPithosResult(status, extraInfo) ⇒
@@ -539,17 +545,18 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
         promise.transform {
           case Return(GoodPithosResult(GetFileInfo(file, contentType))) ⇒
             val size = file.length()
-            val uri = request.uri.removePrefix("/cdmi_objectid")
-            val parentURI = uri.parentUri
+            val requestPath = request.path
+            val requestPathNoObjectIdPrefix = requestPath.removePrefix("/cdmi_objectid")
+            val parentPath = requestPathNoObjectIdPrefix.parentPath
             val isTextPlain = contentType == "text/plain"
             val value = if(isTextPlain) new String(Files.readAllBytes(file.toPath), "UTF-8") else Base64.encodeFile(file)
             val vte = if(isTextPlain) "utf-8" else "base64"
 
             val model = ObjectModel(
-              objectID = uri,
-              objectName = uri,
-              parentURI = parentURI,
-              parentID = parentURI,
+              objectID = requestPathNoObjectIdPrefix,
+              objectName = requestPathNoObjectIdPrefix,
+              parentURI = parentPath,
+              parentID = parentPath,
               domainURI = "",
               mimetype = contentType,
               metadata = Map(StorageSystemMetadata.cdmi_size.name() → size.toString),
@@ -579,9 +586,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
 
     val serviceInfo = getPithosServiceInfo(request)
     val promise = newResultPromise[Unit]
-    val container = objectPath.head
-    val path = objectPath.tail.mkString("/")
-    val uri = request.uri.removePrefix("/cdmi_objectid")
+    val (container, path) = splitPithosContainerAndPath(objectPath)
 
     val content = request.contentString
     val jsonTree = Json.jsonStringToTree(content)
@@ -652,13 +657,14 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
     promise.transform {
       case Return(GoodPithosResult(_)) ⇒
         val size = bytes.length
-        val uri = request.uri.removePrefix("/cdmi_objectid")
-        val parentURI = uri.parentUri
+        val requestPath = request.path
+        val requestPathNoObjectIdPrefix = requestPath.removePrefix("/cdmi_objectid")
+        val parentPath = requestPathNoObjectIdPrefix.parentPath
         val model = ObjectModel(
-          objectID = uri,
-          objectName = uri,
-          parentURI = parentURI,
-          parentID = parentURI,
+          objectID = requestPath,
+          objectName = requestPath,
+          parentURI = parentPath,
+          parentID = parentPath,
           domainURI = "",
           mimetype = mimetype,
           metadata = Map(StorageSystemMetadata.cdmi_size.name() → size.toString),
@@ -690,8 +696,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
 
     val serviceInfo = getPithosServiceInfo(request)
     val promise = newResultPromise[Unit]
-    val container = objectPath.head
-    val path = objectPath.tail.mkString("/")
+    val (container, path) = splitPithosContainerAndPath(objectPath)
 
     val payload = request.getContent()
     val sf_result = pithos.putObject(serviceInfo, container, path, payload, contentType)
@@ -729,8 +734,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
 
     val serviceInfo = getPithosServiceInfo(request)
     val promise = newResultPromise[Unit]
-    val container = objectPath.head
-    val path = objectPath.tail.mkString("/")
+    val (container, path) = splitPithosContainerAndPath(objectPath)
 
     val sf_result = pithos.deleteFile(serviceInfo, container, path)
     sf_result.onComplete {
