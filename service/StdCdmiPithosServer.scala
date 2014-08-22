@@ -399,6 +399,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
     val serviceInfo = getPithosServiceInfo(request)
     val promise = newResultPromise[Unit]
     val container = containerPath.head
+    val isContainerRoot = containerPath.tail.isEmpty
     val path = containerPath.tail mkString "/" match { case "" ⇒ "/"; case s ⇒ "/" + s }
     // FIXME If the folder does not exist, the result here is just an empty folder
     val sf_result = pithos.createDirectory(serviceInfo, container, path)
@@ -435,8 +436,8 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
         val jsonContainer = Json.objectToJsonString(container)
         response(request, Status.Ok, jsonContainer).future
 
-      case Return(BadPithosResult(status, extraInfo)) ⇒
-        response(request, status, extraInfo, "BadPithosResult").future
+      case Return(bpr @ BadPithosResult(status, extraInfo)) ⇒
+        response(request, Status.BadRequest, "", bpr.toString).future
 
       case Throw(t) ⇒
         internalServerError(request, t)
