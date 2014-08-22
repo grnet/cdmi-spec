@@ -100,7 +100,7 @@ trait CdmiRestService {
     val httpResponse = new DefaultHttpResponse(request.getProtocolVersion(), status)
     val response = Response(httpResponse)
 
-    response.headers().set(Headers.X_CDMI_Specification_Version, currentCdmiVersion)
+    response.headers().set(HeaderNames.X_CDMI_Specification_Version, currentCdmiVersion)
 
     val bodyChannelBuffer = copiedBuffer(body, UTF_8)
     response.contentType = contentType.contentType()
@@ -139,6 +139,7 @@ trait CdmiRestService {
       log.info(buffer.toString)
     }
 
+    log.info(s"### END ${request.remoteSocketAddress} ${request.method} ${request.uri} '${request.fileExtension}' ###")
     response
   }
 
@@ -147,8 +148,16 @@ trait CdmiRestService {
     response(request, Status.InternalServerError, t.toString, "", StdContentType.Text_Plain).future
   }
 
-  object Headers {
+  object ContentTypes {
+    final val Application_CdmiObject = CdmiContentType.Application_CdmiObject.contentType()
+    final val Application_CdmiContainer = CdmiContentType.Application_CdmiContainer.contentType()
+    final val Application_CdmiCapability = CdmiContentType.Application_CdmiCapability.contentType()
+  }
+
+  object HeaderNames {
     final val X_CDMI_Specification_Version = CdmiHeader.X_CDMI_Specification_Version.headerName()
+    final val Content_Type = StdHeader.Content_Type.headerName()
+    final val Accept = StdHeader.Accept.headerName()
   }
 
   object Filters {
@@ -189,31 +198,61 @@ trait CdmiRestService {
       }
     }
 
+    // We demand the presence of X-CDMI-Specification-Version only if a cdmi-related Content-Type is present
     final val CdmiVersionHeaderCheck = new Filter {
       override def apply(request: Request, service: Service): Future[Response] = {
-        request.headers().get(Headers.X_CDMI_Specification_Version) match {
-          case null ⇒
-            response(
-              request,
-              Status.BadRequest,
-              s"Please set ${Headers.X_CDMI_Specification_Version}"
-            ).future
+        def JustGoOn() = service(request)
+        val headers = request.headers()
+        val contentType = headers.get(HeaderNames.Content_Type)
+        val xCdmiSpecificationVersion = headers.get(HeaderNames.X_CDMI_Specification_Version)
 
-          case version if supportedCdmiVersions(version) ⇒
-            service(request)
+        if(isCdmiRelatedContentType(contentType)) {
+          xCdmiSpecificationVersion match {
+            case null ⇒
+              response(
+                request,
+                Status.BadRequest,
+                s"Please set ${HeaderNames.X_CDMI_Specification_Version}, since a '$contentType' ${HeaderNames.Content_Type} has been requested"
+              ).future
 
-          case version ⇒
-            response(
-              request,
-              Status.BadRequest,
-              s"Unknown protocol version ${version}. Supported versions are: ${supportedCdmiVersions.mkString(",")}"
-            ).future
+            case version if supportedCdmiVersions(version) ⇒
+              JustGoOn()
+
+            case version ⇒
+              response(
+                request,
+                Status.BadRequest,
+                s"Unknown protocol version $version. Supported versions are: ${supportedCdmiVersions.mkString(",")}"
+              ).future
+          }
+        }
+        else {
+          if(dev() && (xCdmiSpecificationVersion ne null)) {
+            log.warning(s"${HeaderNames.X_CDMI_Specification_Version} is present (': $xCdmiSpecificationVersion') in a request with '${HeaderNames.Content_Type}: $contentType'")
+          }
+          JustGoOn()
         }
       }
     }
   }
 
   val rootCapabilities: CapabilityModel = CapabilityModel.rootOf()
+
+  // TODO Do we need all the other content types in CdmiContentType?
+  def isCdmiRelatedContentType(contentType: String): Boolean =
+    contentType match {
+      case ContentTypes.Application_CdmiObject |
+           ContentTypes.Application_CdmiContainer |
+           ContentTypes.Application_CdmiCapability ⇒
+
+        true
+
+      case _ ⇒
+        false
+    }
+
+  def isCdmiRelatedAccept(request: Request): Boolean =
+    request.acceptMediaTypes.exists(isCdmiRelatedContentType)
 
   /**
    * Return the capabilities of this CDMI implementation.
@@ -238,14 +277,32 @@ trait CdmiRestService {
    * Read the contents or value of a data object (depending on the Accept header).
    */
   def GET_object(request: Request, objectPath: List[String]): Future[Response] =
+    if(isCdmiRelatedAccept(request)) {
+      GET_object_cdmi(request, objectPath)
+    }
+    else {
+      GET_object_noncdmi(request, objectPath)
+    }
+
+  /**
+   * Read a data object in a container using CDMI content type.
+   */
+  def GET_object_cdmi(request: Request, objectPath: List[String]): Future[Response] =
     response(request, Status.NotImplemented).future
+
+  /**
+   * Read a data object in a container using non-CDMI content type.
+   */
+  def GET_object_noncdmi(request: Request, objectPath: List[String]): Future[Response] =
+    response(request, Status.NotImplemented).future
+
 
   /**
    * Create a data object in a container.
    */
   def PUT_object(request: Request, objectPath: List[String]): Future[Response] =
-    request.headers().get(StdHeader.Content_Type.headerName()) match {
-      case s if s == CdmiContentType.Application_CdmiObject.contentType() ⇒
+    request.headers().get(HeaderNames.Content_Type) match {
+      case ContentTypes.Application_CdmiObject ⇒
         PUT_object_cdmi(request, objectPath)
 
       case null ⇒
@@ -297,7 +354,6 @@ trait CdmiRestService {
       val method = request.method
       val uri = request.uri
       val requestPath = request.path
-      val requestParams = request.params
       val normalizedPath = requestPath.normalizePath
 
       val getObjectByIdPF: (HttpMethod, List[String]) ⇒ Future[Response] =
@@ -308,32 +364,32 @@ trait CdmiRestService {
           case _           ⇒ response(request, Status.MethodNotAllowed).future
         }
 
+      log.info(s"### BEGIN ${request.remoteSocketAddress} ${request.method} ${request.uri} '${request.fileExtension}' ###")
       log.debug(s"${method.getName} $uri")
       val pathElements = normalizedPath.pathToList
       val lastIsSlash = normalizedPath(normalizedPath.length - 1) == '/'
       val pathElementsDebugStr = pathElements.map(s ⇒ "\"" + s + "\"").mkString(" ") + (if(lastIsSlash) " [/]" else "")
       log.debug(s"${method.getName} $pathElementsDebugStr")
-      val IS_SLASH = true
-      val IS_NO_SLASH = false
+      val HAVE_SLASH = true
+      val HAVE_NO_SLASH = false
 
       (pathElements, lastIsSlash) match {
         case (Nil, _) ⇒
           // "/"
           response(request, Status.MethodNotAllowed).future
 
-
         case ("" :: Nil, _) ⇒
           // ""
           response(request, Status.MethodNotAllowed).future
 
-        case ("" ::  "cdmi_capabilities" :: Nil, IS_SLASH) ⇒
+        case ("" ::  "cdmi_capabilities" :: Nil, HAVE_SLASH) ⇒
           // "/cdmi_capabilities/"
           method match {
             case Method.Get ⇒ GET_capabilities(request)
             case _ ⇒ response(request, Status.MethodNotAllowed).future
           }
 
-        case ("" ::  "cdmi_capabilities" :: Nil, IS_NO_SLASH) ⇒
+        case ("" ::  "cdmi_capabilities" :: Nil, HAVE_NO_SLASH) ⇒
           // "/cdmi_capabilities"
           // Just being helpful here
           response(
@@ -349,7 +405,7 @@ trait CdmiRestService {
         case ("" :: "cdmi_objectID" :: objectIdPath, _) ⇒
           getObjectByIdPF(method, objectIdPath)
 
-        case ("" :: containerPath, IS_SLASH) ⇒
+        case ("" :: containerPath, HAVE_SLASH) ⇒
           method match {
             case Method.Get    ⇒ GET_container   (request, containerPath)
             case Method.Put    ⇒ PUT_container   (request, containerPath)
@@ -357,7 +413,7 @@ trait CdmiRestService {
             case _ ⇒ response(request, Status.MethodNotAllowed).future
           }
 
-        case ("" :: objectPath, IS_NO_SLASH) ⇒
+        case ("" :: objectPath, HAVE_NO_SLASH) ⇒
           method match {
             case Method.Get    ⇒ GET_object   (request, objectPath)
             case Method.Put    ⇒ PUT_object   (request, objectPath)
