@@ -25,11 +25,11 @@ import gr.grnet.common.http.IContentType;
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
 public enum CdmiContentType implements IContentType {
-    Application_Directory("application/directory"),
     Application_CdmiCapability("application/cdmi-capability"),
-    Application_CdmiDomain("application/vnd.org.snia.cdmi-object"),
-    Application_CdmiContainer("application/cdmi-container"),
-    Application_CdmiObject("application/cdmi-object");
+    Application_CdmiContainer ("application/cdmi-container"),
+    Application_CdmiDomain    ("application/cdmi-domain"),
+    Application_CdmiObject    ("application/cdmi-object"),
+    Application_CdmiQueue     ("application/cdmi-queue");
 
     private final String contentType;
 

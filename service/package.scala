@@ -19,8 +19,6 @@ package gr.grnet.cdmi
 
 import com.twitter.finagle.http.Response
 import com.twitter.util.Future
-import com.twitter.app.Flaggable
-import java.net.URL
 
 /**
  *

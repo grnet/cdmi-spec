@@ -148,10 +148,28 @@ trait CdmiRestService {
     response(request, Status.InternalServerError, t.toString, "", StdContentType.Text_Plain).future
   }
 
+  def notAllowed(request: Request, body: CharSequence = ""): Future[Response] =
+    response(request, Status.MethodNotAllowed, body = body).future
+
+  def notImplemented(request: Request): Future[Response] =
+    response(request, Status.NotImplemented).future
+
   object ContentTypes {
-    final val Application_CdmiObject = CdmiContentType.Application_CdmiObject.contentType()
-    final val Application_CdmiContainer = CdmiContentType.Application_CdmiContainer.contentType()
     final val Application_CdmiCapability = CdmiContentType.Application_CdmiCapability.contentType()
+    final val Application_CdmiContainer = CdmiContentType.Application_CdmiContainer.contentType()
+    final val Application_CdmiDomain = CdmiContentType.Application_CdmiDomain.contentType()
+    final val Application_CdmiObject = CdmiContentType.Application_CdmiObject.contentType()
+    final val Application_CdmiQueue = CdmiContentType.Application_CdmiQueue.contentType()
+
+    def isCdmiCapability(contentType: String): Boolean = contentType == Application_CdmiCapability
+
+    def isCdmiContainer(contentType: String): Boolean = contentType == Application_CdmiContainer
+
+    def isCdmiDomain(contentType: String): Boolean = contentType == Application_CdmiDomain
+
+    def isCdmiObject(contentType: String): Boolean = contentType == Application_CdmiObject
+
+    def isCdmiQueue(contentType: String): Boolean = contentType == Application_CdmiQueue
   }
 
   object HeaderNames {
@@ -212,7 +230,14 @@ trait CdmiRestService {
               response(
                 request,
                 Status.BadRequest,
-                s"Please set ${HeaderNames.X_CDMI_Specification_Version}, since a '$contentType' ${HeaderNames.Content_Type} has been requested"
+                s"Please set ${HeaderNames.X_CDMI_Specification_Version}, since a '${HeaderNames.Content_Type}: $contentType' has been requested"
+              ).future
+
+            case version if version.isEmpty ⇒
+              response(
+                request,
+                Status.BadRequest,
+                s"Please set ${HeaderNames.X_CDMI_Specification_Version}, since a '${HeaderNames.Content_Type}: $contentType' has been requested. In particular, the ${HeaderNames.X_CDMI_Specification_Version} header was present but with an empty value"
               ).future
 
             case version if supportedCdmiVersions(version) ⇒
@@ -227,8 +252,11 @@ trait CdmiRestService {
           }
         }
         else {
-          if(dev() && (xCdmiSpecificationVersion ne null)) {
-            log.warning(s"${HeaderNames.X_CDMI_Specification_Version} is present (': $xCdmiSpecificationVersion') in a request with '${HeaderNames.Content_Type}: $contentType'")
+          val methodName = request.method.getName
+          // It is OK if X-CDMI-Specification-Header is present in a DELETE, since this means that
+          // the request is of CDMI content type.
+          if(dev() && (xCdmiSpecificationVersion ne null) && (methodName != HttpMethod.DELETE.getName)) {
+            log.warning(s"'${HeaderNames.X_CDMI_Specification_Version}: $xCdmiSpecificationVersion' is present in a ${request.method.getName} request with '${HeaderNames.Content_Type}: $contentType' (non-CDMI)")
           }
           JustGoOn()
         }
@@ -251,8 +279,35 @@ trait CdmiRestService {
         false
     }
 
-  def isCdmiRelatedAccept(request: Request): Boolean =
-    request.acceptMediaTypes.exists(isCdmiRelatedContentType)
+  /**
+   * Checks the `Accept` header value and returns `true` iff its first media type makes `p` succeed.
+   * Returns `false` if `Accept` either does not exist or is empty.
+   *
+   * @note We ignore any `q` weights and we rely only on what media type comes first.
+   */
+  def checkAcceptByFirstElem(request: Request)(p: (String) ⇒ Boolean): Boolean = {
+    val mediaTypes = request.acceptMediaTypes
+    mediaTypes.nonEmpty && {
+      val first = mediaTypes(0)
+      // FIXME we ignore any weights and we just check if the first is what we want
+      p(first)
+    }
+  }
+  def isCdmiObjectAccept(request: Request): Boolean =
+    checkAcceptByFirstElem(request)(_ == ContentTypes.Application_CdmiObject)
+
+  def isCdmiObjectOrAnyAccept(request: Request): Boolean =
+    checkAcceptByFirstElem(request)(first ⇒ first == ContentTypes.Application_CdmiObject || first == "*/*")
+
+  def isCdmiContainerAccept(request: Request): Boolean =
+    checkAcceptByFirstElem(request)(_ == ContentTypes.Application_CdmiContainer)
+
+  def isCdmiContainerOrAnyAccept(request: Request): Boolean =
+    checkAcceptByFirstElem(request)(first ⇒ first == ContentTypes.Application_CdmiContainer || first == "*/*")
+
+  def isCdmiQueueAccept(request: Request): Boolean =
+    checkAcceptByFirstElem(request)(_ == ContentTypes.Application_CdmiQueue)
+
 
   /**
    * Return the capabilities of this CDMI implementation.
@@ -273,32 +328,30 @@ trait CdmiRestService {
   def PUT_objectById(request: Request, objectIdPath: List[String]): Future[Response] =
     response(request, Status.NotImplemented).future
 
+  /////////////////////////////////////////////////////////////
+  //+ Create/Update a data object /////////////////////////////
+  /////////////////////////////////////////////////////////////
   /**
-   * Read the contents or value of a data object (depending on the Accept header).
+   * Creates/updates a data object in a container using CDMI content type.
+   *
+   * @note Section 8.2 of CDMI 1.0.2: Create a Data Object Using CDMI Content Type
+   * @note Section 8.6 of CDMI 1.0.2: Update a Data Object using CDMI Content Type
    */
-  def GET_object(request: Request, objectPath: List[String]): Future[Response] =
-    if(isCdmiRelatedAccept(request)) {
-      GET_object_cdmi(request, objectPath)
-    }
-    else {
-      GET_object_noncdmi(request, objectPath)
-    }
+  def PUT_object_cdmi(request: Request, objectPath: List[String]): Future[Response] =
+    notImplemented(request)
 
   /**
-   * Read a data object in a container using CDMI content type.
+   * Creates/updates a data object using non-CDMI content type.
+   * The given `contentType` is guaranteed to be not null.
+   *
+   * @note Section 8.3 of CDMI 1.0.2: Create a Data Object using a Non-CDMI Content Type
+   * @note Section 8.7 of CDMI 1.0.2: Update a Data Object using a Non-CDMI Content Type
    */
-  def GET_object_cdmi(request: Request, objectPath: List[String]): Future[Response] =
-    response(request, Status.NotImplemented).future
+  def PUT_object_noncdmi(request: Request, objectPath: List[String], contentType: String): Future[Response] =
+    notImplemented(request)
 
   /**
-   * Read a data object in a container using non-CDMI content type.
-   */
-  def GET_object_noncdmi(request: Request, objectPath: List[String]): Future[Response] =
-    response(request, Status.NotImplemented).future
-
-
-  /**
-   * Create a data object in a container.
+   * Create/update a data object.
    */
   def PUT_object(request: Request, objectPath: List[String]): Future[Response] =
     request.headers().get(HeaderNames.Content_Type) match {
@@ -311,43 +364,270 @@ trait CdmiRestService {
       case contentType ⇒
         PUT_object_noncdmi(request, objectPath, contentType)
     }
+  /////////////////////////////////////////////////////////////
+  //- Create/Update a data object /////////////////////////////
+  /////////////////////////////////////////////////////////////
 
+
+  /////////////////////////////////////////////////////////////
+  //+ Read a data object //////////////////////////////////////
+  /////////////////////////////////////////////////////////////
   /**
-   * Create a data object in a container using CDMI content type.
+   * Read a data object using CDMI content type.
+   *
+   * @note Section 8.4 of CDMI 1.0.2: Read a Data Object using CDMI Content Type
    */
-  def PUT_object_cdmi(request: Request, objectPath: List[String]): Future[Response] =
-    response(request, Status.NotImplemented).future
+  def GET_object_cdmi(request: Request, objectPath: List[String]): Future[Response] =
+    notImplemented(request)
 
   /**
-   * Create a data object in a container using non-CDMI content type.
-   * The given `contentType` is guaranteed to be not null.
+   * Read a data object using non-CDMI content type.
+   *
+   * @note Section 8.5 of CDMI 1.0.2: Read a Data Object using a Non-CDMI Content Type
    */
-  def PUT_object_noncdmi(request: Request, objectPath: List[String], contentType: String): Future[Response] =
-    response(request, Status.NotImplemented).future
+  def GET_object_noncdmi(request: Request, objectPath: List[String]): Future[Response] =
+    notImplemented(request)
 
   /**
-   * Delete a data object.
+   * Read the contents or value of a data object (depending on the Accept header).
+   */
+  def GET_object(request: Request, objectPath: List[String]): Future[Response] = {
+    val accept = request.headers().get(HeaderNames.Accept)
+    if(isCdmiObjectOrAnyAccept(request)) {
+      GET_object_cdmi(request, objectPath)
+    }
+    else if(isCdmiContainerAccept(request)) {
+      response(
+        request,
+        Status.BadRequest,
+        s"Requested object at ${request.path} with '${HeaderNames.Accept}: $accept'"
+      ).future
+    }
+    else {
+      GET_object_noncdmi(request, objectPath)
+    }
+  }
+  /////////////////////////////////////////////////////////////
+  //- Read a data object //////////////////////////////////////
+  /////////////////////////////////////////////////////////////
+
+  /////////////////////////////////////////////////////////////
+  //+ Delete a data object ////////////////////////////////////
+  /////////////////////////////////////////////////////////////
+  /**
+   * Deletes a data object in a container using CDMI content type.
+   *
+   * @note Section 8.8 of CDMI 1.0.2: Delete a Data Object using CDMI Content Type
+   */
+  def DELETE_object_cdmi(request: Request, objectPath: List[String]): Future[Response] =
+    notImplemented(request)
+
+  /**
+   * Deletes a data object in a container using non-CDMI content type.
+   * The given `contentType` may be `null`.
+   *
+   * @note Section 8.9 of CDMI 1.0.2: Delete a Data Object using a Non-CDMI Content Type
+   */
+  def DELETE_object_noncdmi(request: Request, objectPath: List[String], contentType: String): Future[Response] =
+    notImplemented(request)
+
+  /**
+   * Deletes a data object.
    */
   def DELETE_object(request: Request, objectPath: List[String]): Future[Response] =
-    response(request, Status.NotImplemented).future
+    request.headers().get(HeaderNames.Content_Type) match {
+      case ContentTypes.Application_CdmiObject ⇒
+        DELETE_object_cdmi(request, objectPath)
+
+      case contentType ⇒
+        DELETE_object_noncdmi(request, objectPath, contentType)
+    }
+  /////////////////////////////////////////////////////////////
+  //- Delete a data object ////////////////////////////////////
+  /////////////////////////////////////////////////////////////
+
+
+  /////////////////////////////////////////////////////////////
+  //+ Create/Update a container  //////////////////////////////
+  /////////////////////////////////////////////////////////////
+  /**
+   * Creates/updates a container using CDMI content type.
+   *
+   * @note Section 9.2 of CDMI 1.0.2: Create a Container Object using CDMI Content Type
+   * @note Section 9.5 of CDMI 1.0.2: Update a Container Object using CDMI Content Type
+   */
+  def PUT_container_cdmi(request: Request, containerPath: List[String]): Future[Response] =
+    notImplemented(request)
 
   /**
-   * Lists the contents of a container.
+   * Creates a container using non-CDMI content type.
+   * `contentType` may be `null`.
+   *
+   * @note Section 9.3 of CDMI 1.0.2: Create a Container Object using a Non-CDMI Content Type
+   * @note There is no corresponding "Update a Container Object using a Non-CDMI Content Type"
    */
-  def GET_container(request: Request, containerPath: List[String]): Future[Response] =
-    response(request, Status.NotImplemented).future
+  def PUT_container_noncdmi(request: Request, containerPath: List[String], contentType: String): Future[Response] =
+    notImplemented(request)
 
   /**
    * Creates a new container.
    */
   def PUT_container(request: Request, containerPath: List[String]): Future[Response] =
-    response(request, Status.NotImplemented).future
+    request.headers().get(HeaderNames.Content_Type) match {
+      case ContentTypes.Application_CdmiContainer ⇒
+        PUT_container_cdmi(request, containerPath)
+
+      case contentType ⇒
+        PUT_container_noncdmi(request, containerPath, contentType)
+    }
+  /////////////////////////////////////////////////////////////
+  //- Create/Update a container  //////////////////////////////
+  /////////////////////////////////////////////////////////////
+
+
+  /////////////////////////////////////////////////////////////
+  //+ Read a container  ///////////////////////////////////////
+  /////////////////////////////////////////////////////////////
+  /**
+   * Lists the contents of a container using CDMI content type.
+   *
+   * @note Section 9.4 of CDMI 1.0.2: Read a Container Object using CDMI Content Type
+   */
+  def GET_container_cdmi(request: Request, containerPath: List[String]): Future[Response] =
+    notImplemented(request)
 
   /**
-   * Deletes a container.
+   * Lists the contents of a container using non-CDMI content type.
+   *
+   * @note Technically this is not supported by CDMI 1.0.2.
+   *       An implementation is free to consolidate with `GET_container_cdmi`
+   *       or even override `GET_container`, which in this class delegates here.
+   */
+  def GET_container_noncdmi(request: Request, containerPath: List[String]): Future[Response] =
+    notImplemented(request)
+
+  /**
+   * Lists the contents of a container.
+   */
+  def GET_container(request: Request, containerPath: List[String]): Future[Response] = {
+    val accept = request.headers().get(HeaderNames.Accept)
+    if(isCdmiContainerOrAnyAccept(request)) {
+      GET_container_cdmi(request, containerPath)
+    }
+    else if(isCdmiObjectAccept(request)) {
+      response(
+        request,
+        Status.BadRequest,
+        s"Requested container at ${request.path} with '${HeaderNames.Accept}: $accept'"
+      ).future
+    }
+    else {
+      GET_container_noncdmi(request, containerPath)
+    }
+  }
+  /////////////////////////////////////////////////////////////
+  //- Read a container  ///////////////////////////////////////
+  /////////////////////////////////////////////////////////////
+
+
+  /////////////////////////////////////////////////////////////
+  //+ Delete a container  /////////////////////////////////////
+  /////////////////////////////////////////////////////////////
+
+  /**
+   * Deletes a container using a CDMI content type.
+   *
+   * @note Section 9.6 of CDMI 1.0.2: Delete a Container Object using CDMI Content Type
+   */
+  def DELETE_container_cdmi(request: Request, containerPath: List[String]): Future[Response] =
+    notImplemented(request)
+
+  /**
+   * Deletes a container using a non-CDMI content type.
+   *
+   * @note Section 9.7 of CDMI 1.0.2: Delete a Container Object using a Non-CDMI Content Type
+   */
+  def DELETE_container_noncdmi(request: Request, containerPath: List[String]): Future[Response] =
+    notImplemented(request)
+
+  /**
+   * Deletes a container. In particular,
+   * according to sections 9.6 and 9.7 of CDMI version 1.0.2, the
+   * presence of `X-CDMI-Specification-Version` is what designates
+   * the request as being of CDMI content type.
    */
   def DELETE_container(request: Request, containerPath: List[String]): Future[Response] =
+    request.headers().get(HeaderNames.X_CDMI_Specification_Version) match {
+      case null ⇒
+        DELETE_container_noncdmi(request, containerPath)
+
+      case _ ⇒
+        DELETE_container_cdmi(request, containerPath)
+    }
+  /////////////////////////////////////////////////////////////
+  //- Delete a container  /////////////////////////////////////
+  /////////////////////////////////////////////////////////////
+
+
+  /////////////////////////////////////////////////////////////
+  //+ Create/update a domain  /////////////////////////////////
+  /////////////////////////////////////////////////////////////
+  /**
+   * FIXME This probably needs more refinement
+   * @note Section 10.2 of CDMI 1.0.2: Create a Domain Object using CDMI Content Type
+   * @note Section 10.4 of CDMI 1.0.2: Update a Domain Object using CDMI Content Type
+   */
+  def PUT_domain_cdmi(request: Request, domainPath: List[String]): Future[Response] =
+    notImplemented(request)
+  /////////////////////////////////////////////////////////////
+  //- Create/update a domain  /////////////////////////////////
+  /////////////////////////////////////////////////////////////
+
+
+  /////////////////////////////////////////////////////////////
+  //+ Read a domain  //////////////////////////////////////////
+  /////////////////////////////////////////////////////////////
+  /**
+   * FIXME This probably needs more refinement
+   * @note Section 10.3 of CDMI 1.0.2: Create a Domain Object using CDMI Content Type
+   */
+  def GET_domain_cdmi(request: Request, domainPath: List[String]): Future[Response] =
+    notImplemented(request)
+  /////////////////////////////////////////////////////////////
+  //- Read a domain  //////////////////////////////////////////
+  /////////////////////////////////////////////////////////////
+
+
+  /////////////////////////////////////////////////////////////
+  //+ Delete a domain  ////////////////////////////////////////
+  /////////////////////////////////////////////////////////////
+  /**
+   * FIXME This probably needs more refinement
+   * @note Section 10.3 of CDMI 1.0.2: Create a Domain Object using CDMI Content Type
+   */
+  def DELETE_domain_cdmi(request: Request, domainPath: List[String]): Future[Response] =
     response(request, Status.NotImplemented).future
+  /////////////////////////////////////////////////////////////
+  //- Delete a domain  ////////////////////////////////////////
+  /////////////////////////////////////////////////////////////
+
+  /////////////////////////////////////////////////////////////
+  //+ Queue object and queue object values operations /////////
+  /////////////////////////////////////////////////////////////
+  def GET_queue(request: Request, queuePath: List[String]): Future[Response] =
+    notImplemented(request)
+
+  def POST_queue(request: Request, queuePath: List[String]): Future[Response] =
+    notImplemented(request)
+
+  def PUT_queue(request: Request, queuePath: List[String]): Future[Response] =
+    notImplemented(request)
+
+  def DELETE_queue(request: Request, queuePath: List[String]): Future[Response] =
+    notImplemented(request)
+  /////////////////////////////////////////////////////////////
+  //- Queue object and queue object values operations /////////
+  /////////////////////////////////////////////////////////////
 
   def routingTable: PartialFunction[Request, Future[Response]] = {
     case request ⇒
@@ -405,6 +685,25 @@ trait CdmiRestService {
         case ("" :: "cdmi_objectID" :: objectIdPath, _) ⇒
           getObjectByIdPF(method, objectIdPath)
 
+        case ("" ::  "cdmi_domains" :: domainPath, HAVE_SLASH) ⇒
+          // "/cdmi_domains/"
+          // According to Section 10.1 CDMI 1.0.2, this prefix is reserved for domain URIs
+          method match {
+            case Method.Get ⇒ GET_domain_cdmi(request, domainPath)
+            case Method.Put ⇒ PUT_domain_cdmi(request, domainPath)
+            case Method.Delete ⇒ DELETE_domain_cdmi(request, domainPath)
+            case _ ⇒ response(request, Status.MethodNotAllowed).future
+          }
+
+        case ("" ::  "cdmi_domains" :: Nil, HAVE_NO_SLASH) ⇒
+          // "/cdmi_domains"
+          // Just being helpful here
+          response(
+            request,
+            Status.BadRequest,
+            "Probably you meant to call /cdmi_domains/ instead of /cdmi_domains"
+          ).future
+
         case ("" :: containerPath, HAVE_SLASH) ⇒
           method match {
             case Method.Get    ⇒ GET_container   (request, containerPath)
@@ -414,11 +713,47 @@ trait CdmiRestService {
           }
 
         case ("" :: objectPath, HAVE_NO_SLASH) ⇒
-          method match {
-            case Method.Get    ⇒ GET_object   (request, objectPath)
-            case Method.Put    ⇒ PUT_object   (request, objectPath)
-            case Method.Delete ⇒ DELETE_object(request, objectPath)
-            case _ ⇒ response(request, Status.MethodNotAllowed).future
+          val contentType = request.headers().get(HeaderNames.Content_Type)
+
+          // Separation of queues and data objects is not well defined
+          // and this is an approximate solution/approach.
+          //
+          // In particular:
+          //  - Section 11.2 of CDMI 1.0.2 "Create a Queue Object using CDMI Content Type"
+          //      requires Content-Type: application/cdmi-queue and requires the presence of X-CDMI-Specification-Version header
+          //  - Section 11.3 of CDMI 1.0.2 "Read a Queue Object using CDMI Content Type"
+          //      has an optional Accept header and requires the presence of X-CDMI-Specification-Version header
+          //  - Section 11.4 of CDMI 1.0.2 "Update a Queue Object using CDMI Content Type"
+          //      requires Content-Type: application/cdmi-queue and requires the presence of X-CDMI-Specification-Version header
+          //  - Section 11.5 of CDMI 1.0.2 "Delete a Queue Object using CDMI Content Type"
+          //      says nothing about Accept header and requires the presence of X-CDMI-Specification-Version header
+          //  - Section 11.6 of CDMI 1.0.2 "Enqueue a New Queue Value using CDMI Content Type"
+          //      requires Content-Type: application/cdmi-queue and requires the presence of X-CDMI-Specification-Version header
+          //  - Section 11.7 of CDMI 1.0.2 "Delete a Queue Object Value using CDMI Content Type"
+          //      says nothing about Accept header and requires the presence of X-CDMI-Specification-Version header
+
+          if(ContentTypes.isCdmiQueue(contentType) || isCdmiQueueAccept(request)) {
+            val queuePath = objectPath
+            contentType match {
+              case ContentTypes.Application_CdmiQueue ⇒
+                method match {
+                  case Method.Get    ⇒ GET_queue   (request, queuePath)
+                  case Method.Post   ⇒ POST_queue  (request, queuePath)
+                  case Method.Put    ⇒ PUT_queue   (request, queuePath)
+                  case Method.Delete ⇒ DELETE_queue(request, queuePath)
+                  case _ ⇒ response(request, Status.MethodNotAllowed).future
+                }
+            }
+          }
+          else {
+            // Not a queue thing, just data objects
+
+            method match {
+              case Method.Get    ⇒ GET_object   (request, objectPath)
+              case Method.Put    ⇒ PUT_object   (request, objectPath)
+              case Method.Delete ⇒ DELETE_object(request, objectPath)
+              case _ ⇒ response(request, Status.MethodNotAllowed).future
+            }
           }
 
         case _ ⇒
