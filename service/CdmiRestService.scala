@@ -92,11 +92,23 @@ trait CdmiRestService {
 
   def response(
     request: Request,
-    status: HttpResponseStatus = Status.Ok,
+    status: HttpResponseStatus,
+    contentType: IContentType,
     body: CharSequence = "",
-    devbody: CharSequence = "",
-    contentType: IContentType = StdContentType.Application_Json
+    devbody: CharSequence = ""
   ): Response = {
+
+    val statusCode = status.getCode
+    if(dev() && devbody.length() > 0) {
+      log.info(devbody.toString)
+    }
+    if(statusCode < 200 || statusCode >= 300) {
+      log.error(s"$status $body")
+    }
+    else {
+      log.info(s"$status, '${HeaderNames.Content_Type}: ${contentType.contentType()}', '${HeaderNames.Content_Length}: ${body.length()}'")
+    }
+
     val httpResponse = new DefaultHttpResponse(request.getProtocolVersion(), status)
     val response = Response(httpResponse)
 
@@ -107,54 +119,89 @@ trait CdmiRestService {
     response.contentLength = bodyChannelBuffer.readableBytes()
     response.content = bodyChannelBuffer
 
-    if(dev()) {
-      val buffer = new java.lang.StringBuilder
-      buffer.append('\n')
-      buffer.append(status.toString)
+    logEndRequest(request)
 
-      val method = request.method
-      val uri = request.uri
-      val decodedUri = try URLDecoder.decode(uri, "UTF-8") catch { case e: Exception ⇒ s"(${e.getMessage}) $uri"}
-
-      buffer.append('\n')
-      buffer.append(method.getName)
-      buffer.append(' ')
-      buffer.append(uri)
-      buffer.append('\n')
-      buffer.append(" " * (method.getName.length + 1))
-      buffer.append(decodedUri)
-
-      if(devbody.length() > 0) {
-        buffer.append("\n[")
-        buffer.append(devbody)
-        buffer.append("]\n")
-      }
-
-      if(body.length() > 0) {
-        buffer.append('\n')
-        buffer.append("=== actual body follows ===\n")
-        buffer.append(body)
-      }
-
-      log.info(buffer.toString)
-    }
-
-    log.info(s"### END ${request.remoteSocketAddress} ${request.method} ${request.uri} '${request.fileExtension}' ###")
     response
   }
 
-  def internalServerError(request: Request, t: Throwable): Future[Response] = {
-    log.error(t, t.toString)
-    response(request, Status.InternalServerError, t.toString, "", StdContentType.Text_Plain).future
+  def textPlain(
+    request: Request,
+    status: HttpResponseStatus,
+    body: CharSequence = "",
+    devbody: CharSequence = ""
+  ): Future[Response] =
+    response(request, status, StdContentType.Text_Plain, body, devbody).future
+
+  def appJson(
+    request: Request,
+    status: HttpResponseStatus,
+    body: CharSequence = "",
+    devbody: CharSequence = ""
+  ): Future[Response] =
+    response(request, status, StdContentType.Application_Json, body, devbody).future
+
+
+  def internalServerError(request: Request, t: Throwable, ref: IErrorRef): Future[Response] = {
+    val errMsg = s"[$ref]"
+    val devErrMsg = s"$errMsg $t"
+    log.error(t, devErrMsg)
+
+    textPlain(request, Status.InternalServerError, errMsg, devErrMsg)
   }
 
-  def notAllowed(request: Request, body: CharSequence = ""): Future[Response] =
-    response(request, Status.MethodNotAllowed, body = body).future
+  def notAllowed(
+    request: Request,
+    body: CharSequence = "",
+    contentType: IContentType = StdContentType.Text_Plain
+  ): Future[Response] =
+    response(request, Status.MethodNotAllowed, body = body, contentType = StdContentType.Text_Plain).future
 
-  def notImplemented(request: Request): Future[Response] =
-    response(request, Status.NotImplemented).future
+  def notImplemented(
+    request: Request,
+    body: CharSequence = "",
+    contentType: IContentType = StdContentType.Text_Plain
+  ): Future[Response] =
+    response(request, Status.NotImplemented, body = body, contentType = StdContentType.Text_Plain).future
+
+  def notFound(
+    request: Request,
+    body: CharSequence = "",
+    contentType: IContentType = StdContentType.Text_Plain
+  ): Future[Response] =
+    response(request, Status.NotFound, body = body, contentType = StdContentType.Text_Plain).future
+
+  def badRequest(
+    request: Request,
+    ref: IErrorRef,
+    body: CharSequence = "",
+    contentType: IContentType = StdContentType.Text_Plain
+  ): Future[Response] = {
+    val errBody = s"[$ref] $body"
+    response(request, Status.BadRequest, StdContentType.Text_Plain, errBody).future
+  }
+
+  def okTextPlain(
+    request: Request,
+    body: CharSequence = "",
+    devbody: CharSequence = ""
+  ): Future[Response] =
+    textPlain(request, Status.Ok, body, devbody)
+
+  def okJson(
+    request: Request,
+    body: CharSequence = "",
+    devbody: CharSequence = ""
+  ): Future[Response] =
+    appJson(request, Status.Ok, body, devbody)
 
   object ContentTypes {
+    final val Text_Plain = StdContentType.Text_Plain.contentType()
+    final val Text_Html = StdContentType.Text_Html.contentType()
+    final val Application_Directory = StdContentType.Application_Directory.contentType()
+    final val Application_DirectorySemi = s"$Application_Directory;"
+    final val Application_Folder = StdContentType.Application_Folder.contentType()
+    final val Application_FolderSemi = s"$Application_Folder;"
+
     final val Application_CdmiCapability = CdmiContentType.Application_CdmiCapability.contentType()
     final val Application_CdmiContainer = CdmiContentType.Application_CdmiContainer.contentType()
     final val Application_CdmiDomain = CdmiContentType.Application_CdmiDomain.contentType()
@@ -170,12 +217,23 @@ trait CdmiRestService {
     def isCdmiObject(contentType: String): Boolean = contentType == Application_CdmiObject
 
     def isCdmiQueue(contentType: String): Boolean = contentType == Application_CdmiQueue
+
+    def isCdmi(contentType: String): Boolean =
+      isCdmiCapability(contentType) ||
+      isCdmiContainer(contentType) ||
+      isCdmiDomain(contentType) ||
+      isCdmiObject(contentType) ||
+      isCdmiQueue(contentType)
+
+    def isCdmiLike(contentType: String): Boolean = contentType.startsWith("application/cdmi-")
   }
 
   object HeaderNames {
     final val X_CDMI_Specification_Version = CdmiHeader.X_CDMI_Specification_Version.headerName()
     final val Content_Type = StdHeader.Content_Type.headerName()
     final val Accept = StdHeader.Accept.headerName()
+    final val WWW_Authenticate = StdHeader.WWW_Authenticate.headerName()
+    final val Content_Length = StdHeader.Content_Length.headerName()
   }
 
   object Filters {
@@ -185,7 +243,7 @@ trait CdmiRestService {
         override def map(value: Response): Response = value
 
         override def rescue(t: Throwable): Future[Response] = {
-          log.critical(t, "")
+          log.error(t, "Unexpected Error")
           val response = new DefaultHttpResponse(httpVersion, Status.InternalServerError)
           val body = ""
           response.setContent(copiedBuffer(body, UTF_8))
@@ -204,11 +262,7 @@ trait CdmiRestService {
         val uri = request.uri
 
         if(!isToleratingDoubleSlash && uri.contains("//")) {
-          response(
-            request,
-            Status.BadRequest,
-            s"Double slashes are not tolerated in URIs"
-          ).future
+          badRequest(request, StdErrorRef.BR001, s"Double slashes are not tolerated in URIs")
         }
         else {
           service(request)
@@ -216,49 +270,33 @@ trait CdmiRestService {
       }
     }
 
-    // We demand the presence of X-CDMI-Specification-Version only if a cdmi-related Content-Type is present
-    final val CdmiVersionHeaderCheck = new Filter {
+    // If X-CDMI-Specification-Version is present then we check the value
+    final val CdmiHeaderCheck = new Filter {
       override def apply(request: Request, service: Service): Future[Response] = {
         def JustGoOn() = service(request)
         val headers = request.headers()
         val contentType = headers.get(HeaderNames.Content_Type)
         val xCdmiSpecificationVersion = headers.get(HeaderNames.X_CDMI_Specification_Version)
 
-        if(isCdmiRelatedContentType(contentType)) {
-          xCdmiSpecificationVersion match {
-            case null ⇒
-              response(
-                request,
-                Status.BadRequest,
-                s"Please set ${HeaderNames.X_CDMI_Specification_Version}, since a '${HeaderNames.Content_Type}: $contentType' has been requested"
-              ).future
+        xCdmiSpecificationVersion match {
+          case null ⇒
+            JustGoOn()
 
-            case version if version.isEmpty ⇒
-              response(
-                request,
-                Status.BadRequest,
-                s"Please set ${HeaderNames.X_CDMI_Specification_Version}, since a '${HeaderNames.Content_Type}: $contentType' has been requested. In particular, the ${HeaderNames.X_CDMI_Specification_Version} header was present but with an empty value"
-              ).future
+          case "" ⇒
+            badRequest(
+              request,
+              StdErrorRef.BR002,
+              s"Empty value for header '${HeaderNames.X_CDMI_Specification_Version}'"
+            )
 
-            case version if supportedCdmiVersions(version) ⇒
-              JustGoOn()
+          case v if supportedCdmiVersions(v) ⇒
+            JustGoOn()
 
-            case version ⇒
-              response(
-                request,
-                Status.BadRequest,
-                s"Unknown protocol version $version. Supported versions are: ${supportedCdmiVersions.mkString(",")}"
-              ).future
-          }
-        }
-        else {
-          val methodName = request.method.getName
-          // It is OK if X-CDMI-Specification-Header is present in a DELETE, since this means that
-          // the request is of CDMI content type.
-          if(dev() && (xCdmiSpecificationVersion ne null) && (methodName != HttpMethod.DELETE.getName)) {
-            log.warning(s"'${HeaderNames.X_CDMI_Specification_Version}: $xCdmiSpecificationVersion' is present in a ${request.method.getName} request with '${HeaderNames.Content_Type}: $contentType' (non-CDMI)")
-          }
-          JustGoOn()
+          case v ⇒ badRequest(
+            request,
+            StdErrorRef.BR003,
+            s"Unknown protocol version $v. Supported versions are: ${supportedCdmiVersions.mkString(",")}"
+          )
         }
       }
     }
@@ -316,17 +354,17 @@ trait CdmiRestService {
     val caps = rootCapabilities
     val jsonCaps = Json.objectToJsonString(caps)
 
-    response(request, Status.Ok, jsonCaps).future
+    response(request, Status.Ok, StdContentType.Text_Plain, jsonCaps).future
   }
 
   def GET_objectById(request: Request, objectIdPath: List[String]): Future[Response] =
-    response(request, Status.NotImplemented).future
+    notImplemented(request)
 
   def POST_objectById(request: Request, objectIdPath: List[String]): Future[Response] =
-    response(request, Status.NotImplemented).future
+    notImplemented(request)
 
   def PUT_objectById(request: Request, objectIdPath: List[String]): Future[Response] =
-    response(request, Status.NotImplemented).future
+    notImplemented(request)
 
   /////////////////////////////////////////////////////////////
   //+ Create/Update a data object /////////////////////////////
@@ -353,17 +391,69 @@ trait CdmiRestService {
   /**
    * Create/update a data object.
    */
-  def PUT_object(request: Request, objectPath: List[String]): Future[Response] =
-    request.headers().get(HeaderNames.Content_Type) match {
-      case ContentTypes.Application_CdmiObject ⇒
-        PUT_object_cdmi(request, objectPath)
+  def PUT_object(request: Request, objectPath: List[String]): Future[Response] = {
+    val headers = request.headers()
+    val contentType = headers.get(HeaderNames.Content_Type)
+    val specVersion = headers.get(HeaderNames.X_CDMI_Specification_Version)
 
+    specVersion match {
       case null ⇒
-        response(request, Status.BadRequest, s"${StdHeader.Content_Type.headerName()} is not set").future
+        contentType match {
+          case null ⇒
+            badRequest(
+              request,
+              StdErrorRef.BR007,
+              s"Both '${HeaderNames.X_CDMI_Specification_Version}' and '${HeaderNames.Content_Type}' are not set"
+            )
 
-      case contentType ⇒
-        PUT_object_noncdmi(request, objectPath, contentType)
+          case _ if ContentTypes.isCdmiLike(contentType) ⇒
+            if(ContentTypes.isCdmi(contentType)) {
+              badRequest(
+                request,
+                StdErrorRef.BR008,
+                s"Inappropriate '${HeaderNames.Content_Type}: $contentType' without a '${HeaderNames.X_CDMI_Specification_Version}'"
+              )
+            }
+            else {
+              badRequest(
+                request,
+                StdErrorRef.BR009,
+                s"Unknown '${HeaderNames.Content_Type}: $contentType'"
+              )
+            }
+
+          case _ ⇒
+            PUT_object_noncdmi(request, objectPath, contentType)
+        }
+
+      case _ ⇒
+        contentType match {
+          case null ⇒
+            badRequest(
+              request,
+              StdErrorRef.BR005,
+              s"'${HeaderNames.Content_Type}' is not set"
+            )
+
+          case ContentTypes.Application_CdmiObject ⇒
+            PUT_object_cdmi(request, objectPath)
+
+          case _ if ContentTypes.isCdmiLike(contentType) ⇒
+            badRequest(
+              request,
+              StdErrorRef.BR006,
+              s"Inappropriate '${HeaderNames.Content_Type}: $contentType' with the '${HeaderNames.X_CDMI_Specification_Version}' present. Should be '${HeaderNames.Content_Type}: ${ContentTypes.Application_CdmiObject}'"
+            )
+
+          case _ ⇒
+            badRequest(
+              request,
+              StdErrorRef.BR010,
+              s"Inappropriate '${HeaderNames.Content_Type}: $contentType' with the '${HeaderNames.X_CDMI_Specification_Version}' present. Should be '${HeaderNames.Content_Type}: ${ContentTypes.Application_CdmiObject}'"
+            )
+        }
     }
+  }
   /////////////////////////////////////////////////////////////
   //- Create/Update a data object /////////////////////////////
   /////////////////////////////////////////////////////////////
@@ -389,22 +479,26 @@ trait CdmiRestService {
     notImplemented(request)
 
   /**
-   * Read the contents or value of a data object (depending on the Accept header).
+   * Read the contents or value of a data object (depending on the presence of X-CDMI-Specification-Version).
    */
   def GET_object(request: Request, objectPath: List[String]): Future[Response] = {
-    val accept = request.headers().get(HeaderNames.Accept)
-    if(isCdmiObjectOrAnyAccept(request)) {
-      GET_object_cdmi(request, objectPath)
-    }
-    else if(isCdmiContainerAccept(request)) {
-      response(
-        request,
-        Status.BadRequest,
-        s"Requested object at ${request.path} with '${HeaderNames.Accept}: $accept'"
-      ).future
-    }
-    else {
-      GET_object_noncdmi(request, objectPath)
+    val headers = request.headers()
+    val specVersion = headers.get(HeaderNames.X_CDMI_Specification_Version)
+    val accept = headers.get(HeaderNames.Accept)
+
+    specVersion match {
+      case null ⇒
+        GET_object_noncdmi(request, objectPath)
+
+      case _ if isCdmiObjectOrAnyAccept(request) ⇒
+        GET_object_cdmi(request, objectPath)
+
+      case _ ⇒
+        badRequest(
+          request,
+          StdErrorRef.BR004,
+          s"Requested object at ${request.path} with '${HeaderNames.X_CDMI_Specification_Version}: $specVersion' and '${HeaderNames.Accept}: $accept'"
+        )
     }
   }
   /////////////////////////////////////////////////////////////
@@ -518,6 +612,7 @@ trait CdmiRestService {
       response(
         request,
         Status.BadRequest,
+        StdContentType.Text_Plain,
         s"Requested container at ${request.path} with '${HeaderNames.Accept}: $accept'"
       ).future
     }
@@ -606,7 +701,7 @@ trait CdmiRestService {
    * @note Section 10.3 of CDMI 1.0.2: Create a Domain Object using CDMI Content Type
    */
   def DELETE_domain_cdmi(request: Request, domainPath: List[String]): Future[Response] =
-    response(request, Status.NotImplemented).future
+    notImplemented(request)
   /////////////////////////////////////////////////////////////
   //- Delete a domain  ////////////////////////////////////////
   /////////////////////////////////////////////////////////////
@@ -629,10 +724,22 @@ trait CdmiRestService {
   //- Queue object and queue object values operations /////////
   /////////////////////////////////////////////////////////////
 
+  def logBeginRequest(request: Request): Unit = {
+    log.info(s"### BEGIN ${request.remoteSocketAddress} ${request.method} ${request.uri} ###")
+  }
+
+  def logEndRequest(request: Request): Unit = {
+    log.info(s"### END ${request.remoteSocketAddress} ${request.method} ${request.uri} ###")
+  }
+
   def routingTable: PartialFunction[Request, Future[Response]] = {
     case request ⇒
+      def NotAllowed() = notAllowed(request)
+
+      val headers = request.headers()
       val method = request.method
       val uri = request.uri
+      val decodedUri = try URLDecoder.decode(uri, "UTF-8") catch { case e: Exception ⇒ s"(${e.getMessage}) $uri"}
       val requestPath = request.path
       val normalizedPath = requestPath.normalizePath
 
@@ -641,32 +748,46 @@ trait CdmiRestService {
           case Method.Get  ⇒ GET_objectById(request, objectIdPath)
           case Method.Post ⇒ POST_objectById(request, objectIdPath)
           case Method.Put  ⇒ PUT_objectById(request, objectIdPath)
-          case _           ⇒ response(request, Status.MethodNotAllowed).future
+          case _           ⇒ NotAllowed()
         }
 
-      log.info(s"### BEGIN ${request.remoteSocketAddress} ${request.method} ${request.uri} '${request.fileExtension}' ###")
-      log.debug(s"${method.getName} $uri")
+      logBeginRequest(request)
+      log.debug(s"(original) ${method.getName} $uri")
+      if(decodedUri != uri) {
+        log.debug(s"(decoded)  ${method.getName} $decodedUri")
+      }
+
       val pathElements = normalizedPath.pathToList
       val lastIsSlash = normalizedPath(normalizedPath.length - 1) == '/'
       val pathElementsDebugStr = pathElements.map(s ⇒ "\"" + s + "\"").mkString(" ") + (if(lastIsSlash) " [/]" else "")
-      log.debug(s"${method.getName} $pathElementsDebugStr")
+      log.debug(s"(as list)  ${method.getName} $pathElementsDebugStr")
+
+      def logHeader(name: String): Unit = if(headers.contains(name) ) {
+        val value = headers.get(name)
+        log.debug(s"'$name: $value'")
+      }
+
+      logHeader(HeaderNames.X_CDMI_Specification_Version)
+      logHeader(HeaderNames.Content_Type)
+      logHeader(HeaderNames.Accept)
+
       val HAVE_SLASH = true
       val HAVE_NO_SLASH = false
 
       (pathElements, lastIsSlash) match {
         case (Nil, _) ⇒
           // "/"
-          response(request, Status.MethodNotAllowed).future
+          NotAllowed()
 
         case ("" :: Nil, _) ⇒
           // ""
-          response(request, Status.MethodNotAllowed).future
+          NotAllowed()
 
         case ("" ::  "cdmi_capabilities" :: Nil, HAVE_SLASH) ⇒
           // "/cdmi_capabilities/"
           method match {
             case Method.Get ⇒ GET_capabilities(request)
-            case _ ⇒ response(request, Status.MethodNotAllowed).future
+            case _          ⇒ NotAllowed()
           }
 
         case ("" ::  "cdmi_capabilities" :: Nil, HAVE_NO_SLASH) ⇒
@@ -675,6 +796,7 @@ trait CdmiRestService {
           response(
             request,
             Status.BadRequest,
+            StdContentType.Text_Plain,
             "Probably you meant to call /cdmi_capabilities/ instead of /cdmi_capabilities"
           ).future
 
@@ -689,10 +811,10 @@ trait CdmiRestService {
           // "/cdmi_domains/"
           // According to Section 10.1 CDMI 1.0.2, this prefix is reserved for domain URIs
           method match {
-            case Method.Get ⇒ GET_domain_cdmi(request, domainPath)
-            case Method.Put ⇒ PUT_domain_cdmi(request, domainPath)
+            case Method.Get    ⇒ GET_domain_cdmi(request, domainPath)
+            case Method.Put    ⇒ PUT_domain_cdmi(request, domainPath)
             case Method.Delete ⇒ DELETE_domain_cdmi(request, domainPath)
-            case _ ⇒ response(request, Status.MethodNotAllowed).future
+            case _             ⇒ NotAllowed()
           }
 
         case ("" ::  "cdmi_domains" :: Nil, HAVE_NO_SLASH) ⇒
@@ -701,6 +823,7 @@ trait CdmiRestService {
           response(
             request,
             Status.BadRequest,
+            StdContentType.Text_Plain,
             "Probably you meant to call /cdmi_domains/ instead of /cdmi_domains"
           ).future
 
@@ -709,7 +832,7 @@ trait CdmiRestService {
             case Method.Get    ⇒ GET_container   (request, containerPath)
             case Method.Put    ⇒ PUT_container   (request, containerPath)
             case Method.Delete ⇒ DELETE_container(request, containerPath)
-            case _ ⇒ response(request, Status.MethodNotAllowed).future
+            case _             ⇒ NotAllowed()
           }
 
         case ("" :: objectPath, HAVE_NO_SLASH) ⇒
@@ -741,7 +864,7 @@ trait CdmiRestService {
                   case Method.Post   ⇒ POST_queue  (request, queuePath)
                   case Method.Put    ⇒ PUT_queue   (request, queuePath)
                   case Method.Delete ⇒ DELETE_queue(request, queuePath)
-                  case _ ⇒ response(request, Status.MethodNotAllowed).future
+                  case _             ⇒ NotAllowed()
                 }
             }
           }
@@ -752,12 +875,12 @@ trait CdmiRestService {
               case Method.Get    ⇒ GET_object   (request, objectPath)
               case Method.Put    ⇒ PUT_object   (request, objectPath)
               case Method.Delete ⇒ DELETE_object(request, objectPath)
-              case _ ⇒ response(request, Status.MethodNotAllowed).future
+              case _             ⇒ NotAllowed()
             }
           }
 
         case _ ⇒
-          response(request, Status.MethodNotAllowed).future
+          NotAllowed()
       }
   }
 
@@ -778,7 +901,7 @@ trait CdmiRestService {
     Vector(
       Filters.RogueExceptionHandler,
       Filters.DoubleSlashCheck,
-      Filters.CdmiVersionHeaderCheck
+      Filters.CdmiHeaderCheck
     )
 
   val nettyToFinagle =

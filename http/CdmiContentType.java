@@ -22,6 +22,8 @@ import gr.grnet.common.http.IContentType;
 /**
  * CDMI-specific content types.
  *
+ * This is according to http://www.ietf.org/rfc/rfc6208.txt.
+ *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
 public enum CdmiContentType implements IContentType {
