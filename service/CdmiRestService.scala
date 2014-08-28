@@ -48,6 +48,10 @@ object sslCertPath   extends GlobalFlag[String]("", "SSL certificate path")
 object sslKeyPath    extends GlobalFlag[String]("", "SSL key path")
 
 /**
+ * A skeleton for the implementation of a CDMI-compliant REST service.
+ *
+ * @note When we use the term `object` alone, we mean `data object`.
+ * @note When we use the term `queue` alone, we mean `queue object`
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
@@ -90,6 +94,11 @@ trait CdmiRestService {
     sslKeyPath
   )
 
+  def end(request: Request, response: Response): Response = {
+    logEndRequest(request)
+    response
+  }
+
   def response(
     request: Request,
     status: HttpResponseStatus,
@@ -119,9 +128,7 @@ trait CdmiRestService {
     response.contentLength = bodyChannelBuffer.readableBytes()
     response.content = bodyChannelBuffer
 
-    logEndRequest(request)
-
-    response
+    end(request, response)
   }
 
   def textPlain(
@@ -709,13 +716,13 @@ trait CdmiRestService {
   /////////////////////////////////////////////////////////////
   //+ Queue object and queue object values operations /////////
   /////////////////////////////////////////////////////////////
-  def GET_queue(request: Request, queuePath: List[String]): Future[Response] =
+  def GET_queue_cdmi(request: Request, queuePath: List[String]): Future[Response] =
     notImplemented(request)
 
-  def POST_queue(request: Request, queuePath: List[String]): Future[Response] =
+  def POST_queue_value_cdmi(request: Request, queuePath: List[String]): Future[Response] =
     notImplemented(request)
 
-  def PUT_queue(request: Request, queuePath: List[String]): Future[Response] =
+  def PUT_queue_cdmi(request: Request, queuePath: List[String]): Future[Response] =
     notImplemented(request)
 
   def DELETE_queue(request: Request, queuePath: List[String]): Future[Response] =
@@ -723,6 +730,22 @@ trait CdmiRestService {
   /////////////////////////////////////////////////////////////
   //- Queue object and queue object values operations /////////
   /////////////////////////////////////////////////////////////
+
+  /**
+   * An implementations that provides both data objects and queue objects must be able to detect
+   * the intended semantics. This one of a) delete a data object, b) delete a queue object and
+   * c) delete a queue object value.
+   *
+   * This is deliberately left as not implemented here.
+   *
+   * @note The relevant sections from CDMI 1.0.2 are 8.8, 11.5 and 11.7.
+   */
+  def DELETE_object_or_queue_or_queuevalue_cdmi(
+    request: Request,
+    path: List[String],
+    isQueueAccept: Boolean,
+    isQueueContentType: Boolean
+  ): Future[Response]
 
   def logBeginRequest(request: Request): Unit = {
     log.info(s"### BEGIN ${request.remoteSocketAddress} ${request.method} ${request.uri} ###")
@@ -820,12 +843,11 @@ trait CdmiRestService {
         case ("" ::  "cdmi_domains" :: Nil, HAVE_NO_SLASH) ⇒
           // "/cdmi_domains"
           // Just being helpful here
-          response(
+          badRequest(
             request,
-            Status.BadRequest,
-            StdContentType.Text_Plain,
+            StdErrorRef.BR011,
             "Probably you meant to call /cdmi_domains/ instead of /cdmi_domains"
-          ).future
+          )
 
         case ("" :: containerPath, HAVE_SLASH) ⇒
           method match {
@@ -837,6 +859,15 @@ trait CdmiRestService {
 
         case ("" :: objectPath, HAVE_NO_SLASH) ⇒
           val contentType = request.headers().get(HeaderNames.Content_Type)
+
+          def handleObjects(): Future[Response] = {
+            method match {
+              case Method.Get    ⇒ GET_object   (request, objectPath)
+              case Method.Put    ⇒ PUT_object   (request, objectPath)
+              case Method.Delete ⇒ DELETE_object(request, objectPath)
+              case _             ⇒ NotAllowed()
+            }
+          }
 
           // Separation of queues and data objects is not well defined
           // and this is an approximate solution/approach.
@@ -855,28 +886,46 @@ trait CdmiRestService {
           //  - Section 11.7 of CDMI 1.0.2 "Delete a Queue Object Value using CDMI Content Type"
           //      says nothing about Accept header and requires the presence of X-CDMI-Specification-Version header
 
-          if(ContentTypes.isCdmiQueue(contentType) || isCdmiQueueAccept(request)) {
+          if(headers.contains(HeaderNames.X_CDMI_Specification_Version)) {
+            // possible queue-related request
             val queuePath = objectPath
-            contentType match {
-              case ContentTypes.Application_CdmiQueue ⇒
-                method match {
-                  case Method.Get    ⇒ GET_queue   (request, queuePath)
-                  case Method.Post   ⇒ POST_queue  (request, queuePath)
-                  case Method.Put    ⇒ PUT_queue   (request, queuePath)
-                  case Method.Delete ⇒ DELETE_queue(request, queuePath)
-                  case _             ⇒ NotAllowed()
-                }
+            val isQueueContentType = ContentTypes.isCdmiQueue(contentType)
+            val isQueueAccept = isCdmiQueueAccept(request)
+
+            if(method == Method.Put && isQueueContentType) {
+              if(isQueueAccept) {
+                // Section 11.2 Create a Queue Object using CDMI Content Type
+                PUT_queue_cdmi(request, queuePath)
+              }
+              else {
+                // Section 11.4 Update a Queue Object using CDMI Content Type
+                PUT_queue_cdmi(request, queuePath) // yes, same call as above
+              }
+            }
+            else if(method == Method.Get && isQueueAccept) {
+              // Section 11.3 Read a Queue Object using CDMI Content Type
+              GET_queue_cdmi(request, queuePath)
+            }
+            else if(method == Method.Delete) {
+              // No other way to understand if this is about a data object or a queue object or a queue object value
+              // Section  8.8 Delete a Data Object using CDMI Content Type
+              // Section 11.5 Delete a Queue Object using CDMI Content Type
+              // Section 11.7 Delete a Queue Object Value using CDMI Content Type
+              DELETE_object_or_queue_or_queuevalue_cdmi(request, objectPath /* queuePath */, isQueueAccept, isQueueContentType)
+            }
+            else if(method == Method.Post && isQueueContentType) {
+              // Section 11.6 Enqueue a New Queue Value using CDMI Content Type
+              POST_queue_value_cdmi(request, queuePath)
+            }
+            else {
+              // If not queue related, then it must be object related.
+              // TODO We could detect potential user intention for the queue APIs by checking
+              // TODO `isQueueAccept` and `isQueueContentType`
+              handleObjects()
             }
           }
           else {
-            // Not a queue thing, just data objects
-
-            method match {
-              case Method.Get    ⇒ GET_object   (request, objectPath)
-              case Method.Put    ⇒ PUT_object   (request, objectPath)
-              case Method.Delete ⇒ DELETE_object(request, objectPath)
-              case _             ⇒ NotAllowed()
-            }
+            handleObjects()
           }
 
         case _ ⇒

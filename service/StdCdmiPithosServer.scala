@@ -347,6 +347,30 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
     }
   }
 
+
+  /**
+   * An implementations that provides both data objects and queue objects must be able to detect
+   * the intended semantics. This one of a) delete a data object, b) delete a queue object and
+   * c) delete a queue object value.
+   *
+   * This is deliberately left as not implemented here.
+   *
+   * @note The relevant sections from CDMI 1.0.2 are 8.8, 11.5 and 11.7.
+   */
+  def DELETE_object_or_queue_or_queuevalue_cdmi(
+    request: Request,
+    path: List[String],
+    isQueueAccept: Boolean,
+    isQueueContentType: Boolean
+  ): Future[StdCdmiPithosServer.Response] = {
+    if(isQueueAccept || isQueueContentType) {
+      notImplemented(request)
+    }
+    else {
+      DELETE_object_cdmi(request, path)
+    }
+  }
+
   /**
    * Lists the contents of a container.
    */
@@ -620,9 +644,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
         response.contentLength = howmanyWritten
         response.content = bodyChannelBuffer
 
-        logEndRequest(request) // since we do not use the inherited response() method
-
-        response.future
+        end(request, response).future
     }
   }
 
