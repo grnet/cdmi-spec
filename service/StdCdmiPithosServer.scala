@@ -349,11 +349,9 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
 
 
   /**
-   * An implementations that provides both data objects and queue objects must be able to detect
-   * the intended semantics. This one of a) delete a data object, b) delete a queue object and
-   * c) delete a queue object value.
-   *
-   * This is deliberately left as not implemented here.
+   * We do not implement queues, so if we detect a queue-related `Accept`
+   * or `Content-Type` header we send back `501 Not Implemented`. Otherwise
+   * we delegate to `DELETE_object_cdmi`.
    *
    * @note The relevant sections from CDMI 1.0.2 are 8.8, 11.5 and 11.7.
    */

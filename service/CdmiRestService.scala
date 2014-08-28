@@ -874,17 +874,25 @@ trait CdmiRestService {
           //
           // In particular:
           //  - Section 11.2 of CDMI 1.0.2 "Create a Queue Object using CDMI Content Type"
-          //      requires Content-Type: application/cdmi-queue and requires the presence of X-CDMI-Specification-Version header
+          //      requires Content-Type: application/cdmi-queue and
+          //      requires the presence of X-CDMI-Specification-Version header
           //  - Section 11.3 of CDMI 1.0.2 "Read a Queue Object using CDMI Content Type"
-          //      has an optional Accept header and requires the presence of X-CDMI-Specification-Version header
+          //      has an optional Accept header and
+          //      requires the presence of X-CDMI-Specification-Version header
           //  - Section 11.4 of CDMI 1.0.2 "Update a Queue Object using CDMI Content Type"
-          //      requires Content-Type: application/cdmi-queue and requires the presence of X-CDMI-Specification-Version header
+          //      requires Content-Type: application/cdmi-queue and
+          //      requires the presence of X-CDMI-Specification-Version header
           //  - Section 11.5 of CDMI 1.0.2 "Delete a Queue Object using CDMI Content Type"
-          //      says nothing about Accept header and requires the presence of X-CDMI-Specification-Version header
+          //      requires the presence of X-CDMI-Specification-Version header
           //  - Section 11.6 of CDMI 1.0.2 "Enqueue a New Queue Value using CDMI Content Type"
-          //      requires Content-Type: application/cdmi-queue and requires the presence of X-CDMI-Specification-Version header
+          //      requires Content-Type: application/cdmi-queue and
+          //      requires the presence of X-CDMI-Specification-Version header
           //  - Section 11.7 of CDMI 1.0.2 "Delete a Queue Object Value using CDMI Content Type"
-          //      says nothing about Accept header and requires the presence of X-CDMI-Specification-Version header
+          //      requires the presence of X-CDMI-Specification-Version header
+          //
+          //
+          // The common requirement for queue operations is the presence of X-CDMI-Specification-Version
+          // header and this is what we check first:
 
           if(headers.contains(HeaderNames.X_CDMI_Specification_Version)) {
             // possible queue-related request
