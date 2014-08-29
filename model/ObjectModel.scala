@@ -17,14 +17,14 @@
 
 package gr.grnet.cdmi.model
 
-import gr.grnet.cdmi.http.CdmiContentType
+import gr.grnet.cdmi.http.CdmiMediaType
 
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
 case class ObjectModel(
-  objectType: String = CdmiContentType.Application_CdmiObject.contentType(),
+  objectType: String = CdmiMediaType.Application_CdmiObject.value(),
   objectID: String,
   objectName: String,
   parentURI: String,

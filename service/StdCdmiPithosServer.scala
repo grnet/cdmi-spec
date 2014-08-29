@@ -30,7 +30,7 @@ import com.twitter.logging.{Level, Logging}
 import com.twitter.util.{Future, Promise, Return, Throw}
 import gr.grnet.cdmi.metadata.StorageSystemMetadata
 import gr.grnet.cdmi.model.{ContainerModel, Model, ObjectModel}
-import gr.grnet.common.http.{StdContentType, StdHeader, TResult}
+import gr.grnet.common.http.{StdMediaType, StdHeader, TResult}
 import gr.grnet.common.io.{Base64, CloseAnyway, DeleteAnyway}
 import gr.grnet.common.json.Json
 import gr.grnet.common.text.{NoTrailingSlash, ParentPath, RemovePrefix}
@@ -120,7 +120,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
       val response = request.response
       response.status = Status.Unauthorized
       val rh = response.headers()
-      rh.set(HeaderNames.Content_Type,     ContentTypes.Text_Html)
+      rh.set(HeaderNames.Content_Type,     MediaTypes.Text_Html)
       rh.set(HeaderNames.WWW_Authenticate, s"Keystone uri='${authURL()}'")
       rh.set(HeaderNames.Content_Length,   "0")
 
@@ -156,7 +156,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
       val promise = newResultPromise[String]
 
       val reqBuilder = asyncHttp.preparePost(tokensURL())
-      reqBuilder.setHeader(StdHeader.Content_Type.headerName(), StdContentType.Application_Json.contentType())
+      reqBuilder.setHeader(StdHeader.Content_Type.headerName(), StdMediaType.Application_Json.value())
       reqBuilder.setBody(jsonPayload)
       val handler = new AsyncCompletionHandler[Unit] {
         override def onThrowable(t: Throwable): Unit =
@@ -290,11 +290,11 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
 
   def fixPathFromContentType(path: String, contentType: String): String =
     contentType match {
-      case ContentTypes.Application_Directory | ContentTypes.Application_Folder ⇒
+      case MediaTypes.Application_Directory | MediaTypes.Application_Folder ⇒
         s"$path/"
 
-      case _ if contentType.startsWith(ContentTypes.Application_DirectorySemi) ||
-                contentType.startsWith(ContentTypes.Application_FolderSemi) ⇒
+      case _ if contentType.startsWith(MediaTypes.Application_DirectorySemi) ||
+                contentType.startsWith(MediaTypes.Application_FolderSemi) ⇒
         s"$path/"
 
       case _ ⇒
@@ -349,24 +349,13 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
 
 
   /**
-   * We do not implement queues, so if we detect a queue-related `Accept`
-   * or `Content-Type` header we send back `501 Not Implemented`. Otherwise
-   * we delegate to `DELETE_object_cdmi`.
+   * We delegate to `DELETE_object_cdmi`.
    *
    * @note The relevant sections from CDMI 1.0.2 are 8.8, 11.5 and 11.7.
    */
-  def DELETE_object_or_queue_or_queuevalue_cdmi(
-    request: Request,
-    path: List[String],
-    isQueueAccept: Boolean,
-    isQueueContentType: Boolean
-  ): Future[StdCdmiPithosServer.Response] = {
-    if(isQueueAccept || isQueueContentType) {
-      notImplemented(request)
-    }
-    else {
-      DELETE_object_cdmi(request, path)
-    }
+  def DELETE_object_or_queue_or_queuevalue_cdmi(request: Request, path: List[String]): Future[StdCdmiPithosServer.Response] = {
+    // We support only data objects
+    DELETE_object_cdmi(request, path)
   }
 
   /**
@@ -521,14 +510,6 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
     }
   }
 
-  override def GET_objectById(
-    request: Request, objectIdPath: List[String]
-  ): Future[Response] = {
-    // No real object IDs here
-    GET_object(request, objectIdPath)
-  }
-
-
   def GET_object_(
     request: Request,
     objectPath: List[String]
@@ -595,7 +576,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
         val requestPath = request.path
         val requestPathNoObjectIdPrefix = requestPath.removePrefix("/cdmi_objectid")
         val parentPath = requestPathNoObjectIdPrefix.parentPath
-        val isTextPlain = contentType == ContentTypes.Text_Plain
+        val isTextPlain = contentType == MediaTypes.Text_Plain
         val value = if(isTextPlain) new String(Files.readAllBytes(file.toPath), "UTF-8") else Base64.encodeFile(file)
         val vte = if(isTextPlain) "utf-8" else "base64"
 
@@ -650,7 +631,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
   /**
    * Create a data object in a container using CDMI content type.
    */
-  override def PUT_object_cdmi(
+  override def PUT_object_cdmi_create_or_update(
     request: Request, objectPath: List[String]
   ): Future[Response] = {
 
@@ -708,7 +689,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
     }
 
     val mimetype = mimeTypeNode match {
-      case null ⇒ ContentTypes.Text_Plain
+      case null ⇒ MediaTypes.Text_Plain
       case _    ⇒ mimeTypeNode.asText()
     }
 
@@ -808,10 +789,7 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
   /**
    * Delete a data object (file).
    */
-  override def DELETE_object(
-    request: Request, objectPath: List[String]
-  ): Future[Response] = {
-
+  def DELETE_object_(request: Request, objectPath: List[String]): Future[Response] = {
     val serviceInfo = getPithosServiceInfo(request)
     val promise = newResultPromise[Unit]
     val (container, path) = splitPithosContainerAndPath(objectPath)
@@ -824,10 +802,27 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
         okTextPlain(request)
 
       case Return(bpr @ BadPithosResult(status, extraInfo)) ⇒
-        response(request, status, StdContentType.Text_Plain, extraInfo, bpr.toString).future
+        textPlain(request, status, extraInfo, bpr.toString)
 
       case Throw(t) ⇒
         internalServerError(request, t, PithosErrorRef.PIE008)
     }
   }
+
+  /**
+   * Deletes a data object in a container using CDMI content type.
+   *
+   * @note Section 8.8 of CDMI 1.0.2: Delete a Data Object using CDMI Content Type
+   */
+  override def DELETE_object_cdmi(request: Request, objectPath: List[String]): Future[Response] =
+    DELETE_object_(request, objectPath)
+
+
+  /**
+   * Deletes a data object in a container using non-CDMI content type.
+   *
+   * @note Section 8.9 of CDMI 1.0.2: Delete a Data Object using a Non-CDMI Content Type
+   */
+  override def DELETE_object_noncdmi(request: Request, objectPath: List[String]): Future[Response] =
+    DELETE_object_(request, objectPath)
 }

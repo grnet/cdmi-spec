@@ -18,7 +18,7 @@
 package gr.grnet.cdmi.model
 
 import gr.grnet.cdmi.capability.{ICapability, ContainerCapability}
-import gr.grnet.cdmi.http.CdmiContentType
+import gr.grnet.cdmi.http.CdmiMediaType
 
 /**
  *
@@ -47,7 +47,7 @@ object CapabilityModel {
     objectName: String = "cdmi_capabilities/"
   ) =
     CapabilityModel(
-      objectType = CdmiContentType.Application_CdmiCapability.contentType(),
+      objectType = CdmiMediaType.Application_CdmiCapability.value(),
       objectID = objectID,
       objectName = objectName,
       parentURI = parentURI,

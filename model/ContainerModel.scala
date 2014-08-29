@@ -17,7 +17,7 @@
 
 package gr.grnet.cdmi.model
 
-import gr.grnet.cdmi.http.CdmiContentType
+import gr.grnet.cdmi.http.CdmiMediaType
 import scala.collection.immutable.Seq
 
 /**
@@ -25,7 +25,7 @@ import scala.collection.immutable.Seq
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
 case class ContainerModel(
-  objectType: String = CdmiContentType.Application_CdmiContainer.contentType(),
+  objectType: String = CdmiMediaType.Application_CdmiContainer.value(),
   objectID: String,
   objectName: String,
   parentURI: String,

@@ -17,27 +17,29 @@
 
 package gr.grnet.cdmi.service
 
-import com.twitter.app.GlobalFlag
-import com.twitter.finagle.http.{Status, Method}
-import com.twitter.finagle.netty3.{Netty3Listener, Netty3ListenerTLSConfig}
-import com.twitter.finagle.ssl.Ssl
-import com.twitter.finagle.{ServerCodecConfig, http, Filter, Http}
-import com.twitter.logging.Logger
-import com.twitter.util.{FutureTransformer, Await, Future}
-import gr.grnet.cdmi.http.{CdmiContentType, CdmiHeader}
-import gr.grnet.cdmi.model.CapabilityModel
-import gr.grnet.common.http.{StdContentType, IContentType, StdHeader}
-import gr.grnet.common.json.Json
-import gr.grnet.common.text.{PathToList, NormalizePath}
 import java.io.File
-import java.net.{SocketAddress, URLDecoder, InetSocketAddress}
-import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
-import org.jboss.netty.handler.codec.http.{HttpVersion, HttpResponse, HttpRequest, HttpMethod, HttpResponseStatus, DefaultHttpResponse}
-import org.jboss.netty.util.CharsetUtil.UTF_8
-import scala.collection.immutable.Seq
-import com.twitter.finagle.server.DefaultServer
-import com.twitter.finagle.dispatch.SerialServerDispatcher
+import java.net.{InetSocketAddress, SocketAddress, URLDecoder}
+
+import com.twitter.app.GlobalFlag
 import com.twitter.conversions.storage.intToStorageUnitableWholeNumber
+import com.twitter.finagle.dispatch.SerialServerDispatcher
+import com.twitter.finagle.http.{Method, Status}
+import com.twitter.finagle.netty3.{Netty3Listener, Netty3ListenerTLSConfig}
+import com.twitter.finagle.server.DefaultServer
+import com.twitter.finagle.ssl.Ssl
+import com.twitter.finagle.{Filter, Http, ServerCodecConfig, http}
+import com.twitter.logging.Logger
+import com.twitter.util.{Await, Future, FutureTransformer}
+import gr.grnet.cdmi.http.{CdmiHeader, CdmiMediaType}
+import gr.grnet.cdmi.model.CapabilityModel
+import gr.grnet.common.http.{IMediaType, StdHeader, StdMediaType}
+import gr.grnet.common.json.Json
+import gr.grnet.common.text.{NormalizePath, PathToList}
+import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
+import org.jboss.netty.handler.codec.http.{DefaultHttpResponse, HttpMethod, HttpRequest, HttpResponse, HttpResponseStatus, HttpVersion}
+import org.jboss.netty.util.CharsetUtil.UTF_8
+
+import scala.collection.immutable.Seq
 
 object port          extends GlobalFlag[InetSocketAddress](new InetSocketAddress(8080), "http port")
 object dev           extends GlobalFlag[Boolean](false, "enable development mode")
@@ -50,6 +52,7 @@ object sslKeyPath    extends GlobalFlag[String]("", "SSL key path")
 /**
  * A skeleton for the implementation of a CDMI-compliant REST service.
  *
+ * @note We base our implementation on version 1.0.2 of the spec.
  * @note When we use the term `object` alone, we mean `data object`.
  * @note When we use the term `queue` alone, we mean `queue object`
  *
@@ -102,7 +105,7 @@ trait CdmiRestService {
   def response(
     request: Request,
     status: HttpResponseStatus,
-    contentType: IContentType,
+    contentType: IMediaType,
     body: CharSequence = "",
     devbody: CharSequence = ""
   ): Response = {
@@ -115,7 +118,7 @@ trait CdmiRestService {
       log.error(s"$status $body")
     }
     else {
-      log.info(s"$status, '${HeaderNames.Content_Type}: ${contentType.contentType()}', '${HeaderNames.Content_Length}: ${body.length()}'")
+      log.info(s"$status, '${HeaderNames.Content_Type}: ${contentType.value()}', '${HeaderNames.Content_Length}: ${body.length()}'")
     }
 
     val httpResponse = new DefaultHttpResponse(request.getProtocolVersion(), status)
@@ -124,7 +127,7 @@ trait CdmiRestService {
     response.headers().set(HeaderNames.X_CDMI_Specification_Version, currentCdmiVersion)
 
     val bodyChannelBuffer = copiedBuffer(body, UTF_8)
-    response.contentType = contentType.contentType()
+    response.contentType = contentType.value()
     response.contentLength = bodyChannelBuffer.readableBytes()
     response.content = bodyChannelBuffer
 
@@ -137,7 +140,7 @@ trait CdmiRestService {
     body: CharSequence = "",
     devbody: CharSequence = ""
   ): Future[Response] =
-    response(request, status, StdContentType.Text_Plain, body, devbody).future
+    response(request, status, StdMediaType.Text_Plain, body, devbody).future
 
   def appJson(
     request: Request,
@@ -145,7 +148,7 @@ trait CdmiRestService {
     body: CharSequence = "",
     devbody: CharSequence = ""
   ): Future[Response] =
-    response(request, status, StdContentType.Application_Json, body, devbody).future
+    response(request, status, StdMediaType.Application_Json, body, devbody).future
 
 
   def internalServerError(request: Request, t: Throwable, ref: IErrorRef): Future[Response] = {
@@ -159,32 +162,32 @@ trait CdmiRestService {
   def notAllowed(
     request: Request,
     body: CharSequence = "",
-    contentType: IContentType = StdContentType.Text_Plain
+    contentType: IMediaType = StdMediaType.Text_Plain
   ): Future[Response] =
-    response(request, Status.MethodNotAllowed, body = body, contentType = StdContentType.Text_Plain).future
+    response(request, Status.MethodNotAllowed, body = body, contentType = StdMediaType.Text_Plain).future
 
   def notImplemented(
     request: Request,
     body: CharSequence = "",
-    contentType: IContentType = StdContentType.Text_Plain
+    contentType: IMediaType = StdMediaType.Text_Plain
   ): Future[Response] =
-    response(request, Status.NotImplemented, body = body, contentType = StdContentType.Text_Plain).future
+    response(request, Status.NotImplemented, body = body, contentType = StdMediaType.Text_Plain).future
 
   def notFound(
     request: Request,
     body: CharSequence = "",
-    contentType: IContentType = StdContentType.Text_Plain
+    contentType: IMediaType = StdMediaType.Text_Plain
   ): Future[Response] =
-    response(request, Status.NotFound, body = body, contentType = StdContentType.Text_Plain).future
+    response(request, Status.NotFound, body = body, contentType = StdMediaType.Text_Plain).future
 
   def badRequest(
     request: Request,
     ref: IErrorRef,
     body: CharSequence = "",
-    contentType: IContentType = StdContentType.Text_Plain
+    contentType: IMediaType = StdMediaType.Text_Plain
   ): Future[Response] = {
     val errBody = s"[$ref] $body"
-    response(request, Status.BadRequest, StdContentType.Text_Plain, errBody).future
+    response(request, Status.BadRequest, StdMediaType.Text_Plain, errBody).future
   }
 
   def okTextPlain(
@@ -201,38 +204,76 @@ trait CdmiRestService {
   ): Future[Response] =
     appJson(request, Status.Ok, body, devbody)
 
-  object ContentTypes {
-    final val Text_Plain = StdContentType.Text_Plain.contentType()
-    final val Text_Html = StdContentType.Text_Html.contentType()
-    final val Application_Directory = StdContentType.Application_Directory.contentType()
+  object MediaTypes {
+    final val Text_Plain = StdMediaType.Text_Plain.value()
+    final val Text_Html = StdMediaType.Text_Html.value()
+    final val Application_Directory = StdMediaType.Application_Directory.value()
     final val Application_DirectorySemi = s"$Application_Directory;"
-    final val Application_Folder = StdContentType.Application_Folder.contentType()
+    final val Application_Folder = StdMediaType.Application_Folder.value()
     final val Application_FolderSemi = s"$Application_Folder;"
 
-    final val Application_CdmiCapability = CdmiContentType.Application_CdmiCapability.contentType()
-    final val Application_CdmiContainer = CdmiContentType.Application_CdmiContainer.contentType()
-    final val Application_CdmiDomain = CdmiContentType.Application_CdmiDomain.contentType()
-    final val Application_CdmiObject = CdmiContentType.Application_CdmiObject.contentType()
-    final val Application_CdmiQueue = CdmiContentType.Application_CdmiQueue.contentType()
+    final val Application_CdmiCapability = CdmiMediaType.Application_CdmiCapability.value()
+    final val Application_CdmiContainer = CdmiMediaType.Application_CdmiContainer.value()
+    final val Application_CdmiDomain = CdmiMediaType.Application_CdmiDomain.value()
+    final val Application_CdmiObject = CdmiMediaType.Application_CdmiObject.value()
+    final val Application_CdmiQueue = CdmiMediaType.Application_CdmiQueue.value()
 
-    def isCdmiCapability(contentType: String): Boolean = contentType == Application_CdmiCapability
+    def isCdmiCapability(mediaType: String): Boolean = mediaType == Application_CdmiCapability
 
-    def isCdmiContainer(contentType: String): Boolean = contentType == Application_CdmiContainer
+    def isCdmiContainer(mediaType: String): Boolean = mediaType == Application_CdmiContainer
 
-    def isCdmiDomain(contentType: String): Boolean = contentType == Application_CdmiDomain
+    def isCdmiDomain(mediaType: String): Boolean = mediaType == Application_CdmiDomain
 
-    def isCdmiObject(contentType: String): Boolean = contentType == Application_CdmiObject
+    def isCdmiObject(mediaType: String): Boolean = mediaType == Application_CdmiObject
 
-    def isCdmiQueue(contentType: String): Boolean = contentType == Application_CdmiQueue
+    def isCdmiQueue(mediaType: String): Boolean = mediaType == Application_CdmiQueue
 
-    def isCdmi(contentType: String): Boolean =
-      isCdmiCapability(contentType) ||
-      isCdmiContainer(contentType) ||
-      isCdmiDomain(contentType) ||
-      isCdmiObject(contentType) ||
-      isCdmiQueue(contentType)
+    def isCdmi(mediaType: String): Boolean =
+      isCdmiCapability(mediaType) ||
+      isCdmiContainer(mediaType) ||
+      isCdmiDomain(mediaType) ||
+      isCdmiObject(mediaType) ||
+      isCdmiQueue(mediaType)
 
-    def isCdmiLike(contentType: String): Boolean = contentType.startsWith("application/cdmi-")
+    def isCdmiLike(mediaType: String): Boolean = (mediaType ne null) && mediaType.startsWith("application/cdmi-")
+  }
+
+  object Accept {
+    /**
+     * Checks the `Accept` header value and returns `true` iff its first media type makes `p` succeed.
+     * Returns `false` if `Accept` either does not exist or is empty.
+     *
+     * @note We ignore any `q` weights and we rely only on what media type comes first.
+     */
+    def checkAcceptByFirstElem(request: Request)(p: (String) ⇒ Boolean): Boolean = {
+      val mediaTypes = request.acceptMediaTypes
+      mediaTypes.nonEmpty && {
+        val first = mediaTypes(0)
+        // FIXME we ignore any weights and we just check if the first is what we want
+        p(first)
+      }
+    }
+
+    def isAny(request: Request): Boolean =
+      checkAcceptByFirstElem(request)(_ == "*/*")
+
+    def isCdmiObject(request: Request): Boolean =
+      checkAcceptByFirstElem(request)(_ == MediaTypes.Application_CdmiObject)
+
+    def isCdmiObjectOrAny(request: Request): Boolean =
+      checkAcceptByFirstElem(request)(first ⇒ first == MediaTypes.Application_CdmiObject || first == "*/*")
+
+    def isCdmiContainer(request: Request): Boolean =
+      checkAcceptByFirstElem(request)(_ == MediaTypes.Application_CdmiContainer)
+
+    def isCdmiContainerOrAny(request: Request): Boolean =
+      checkAcceptByFirstElem(request)(first ⇒ first == MediaTypes.Application_CdmiContainer || first == "*/*")
+
+    def isCdmiQueue(request: Request): Boolean =
+      checkAcceptByFirstElem(request)(_ == MediaTypes.Application_CdmiQueue)
+
+    def isCdmiLike(request: Request): Boolean =
+      checkAcceptByFirstElem(request)(MediaTypes.isCdmiLike)
   }
 
   object HeaderNames {
@@ -311,49 +352,6 @@ trait CdmiRestService {
 
   val rootCapabilities: CapabilityModel = CapabilityModel.rootOf()
 
-  // TODO Do we need all the other content types in CdmiContentType?
-  def isCdmiRelatedContentType(contentType: String): Boolean =
-    contentType match {
-      case ContentTypes.Application_CdmiObject |
-           ContentTypes.Application_CdmiContainer |
-           ContentTypes.Application_CdmiCapability ⇒
-
-        true
-
-      case _ ⇒
-        false
-    }
-
-  /**
-   * Checks the `Accept` header value and returns `true` iff its first media type makes `p` succeed.
-   * Returns `false` if `Accept` either does not exist or is empty.
-   *
-   * @note We ignore any `q` weights and we rely only on what media type comes first.
-   */
-  def checkAcceptByFirstElem(request: Request)(p: (String) ⇒ Boolean): Boolean = {
-    val mediaTypes = request.acceptMediaTypes
-    mediaTypes.nonEmpty && {
-      val first = mediaTypes(0)
-      // FIXME we ignore any weights and we just check if the first is what we want
-      p(first)
-    }
-  }
-  def isCdmiObjectAccept(request: Request): Boolean =
-    checkAcceptByFirstElem(request)(_ == ContentTypes.Application_CdmiObject)
-
-  def isCdmiObjectOrAnyAccept(request: Request): Boolean =
-    checkAcceptByFirstElem(request)(first ⇒ first == ContentTypes.Application_CdmiObject || first == "*/*")
-
-  def isCdmiContainerAccept(request: Request): Boolean =
-    checkAcceptByFirstElem(request)(_ == ContentTypes.Application_CdmiContainer)
-
-  def isCdmiContainerOrAnyAccept(request: Request): Boolean =
-    checkAcceptByFirstElem(request)(first ⇒ first == ContentTypes.Application_CdmiContainer || first == "*/*")
-
-  def isCdmiQueueAccept(request: Request): Boolean =
-    checkAcceptByFirstElem(request)(_ == ContentTypes.Application_CdmiQueue)
-
-
   /**
    * Return the capabilities of this CDMI implementation.
    */
@@ -361,7 +359,7 @@ trait CdmiRestService {
     val caps = rootCapabilities
     val jsonCaps = Json.objectToJsonString(caps)
 
-    response(request, Status.Ok, StdContentType.Text_Plain, jsonCaps).future
+    response(request, Status.Ok, StdMediaType.Text_Plain, jsonCaps).future
   }
 
   def GET_objectById(request: Request, objectIdPath: List[String]): Future[Response] =
@@ -382,7 +380,15 @@ trait CdmiRestService {
    * @note Section 8.2 of CDMI 1.0.2: Create a Data Object Using CDMI Content Type
    * @note Section 8.6 of CDMI 1.0.2: Update a Data Object using CDMI Content Type
    */
-  def PUT_object_cdmi(request: Request, objectPath: List[String]): Future[Response] =
+  def PUT_object_cdmi_create_or_update(request: Request, objectPath: List[String]): Future[Response] =
+    notImplemented(request)
+
+  /**
+   * Creates a data object in a container using CDMI content type.
+   *
+   * @note Section 8.2 of CDMI 1.0.2: Create a Data Object Using CDMI Content Type
+   */
+  def PUT_object_cdmi_create(request: Request, objectPath: List[String]): Future[Response] =
     notImplemented(request)
 
   /**
@@ -413,8 +419,8 @@ trait CdmiRestService {
               s"Both '${HeaderNames.X_CDMI_Specification_Version}' and '${HeaderNames.Content_Type}' are not set"
             )
 
-          case _ if ContentTypes.isCdmiLike(contentType) ⇒
-            if(ContentTypes.isCdmi(contentType)) {
+          case _ if MediaTypes.isCdmiLike(contentType) ⇒
+            if(MediaTypes.isCdmi(contentType)) {
               badRequest(
                 request,
                 StdErrorRef.BR008,
@@ -442,21 +448,21 @@ trait CdmiRestService {
               s"'${HeaderNames.Content_Type}' is not set"
             )
 
-          case ContentTypes.Application_CdmiObject ⇒
-            PUT_object_cdmi(request, objectPath)
+          case MediaTypes.Application_CdmiObject ⇒
+            PUT_object_cdmi_create_or_update(request, objectPath)
 
-          case _ if ContentTypes.isCdmiLike(contentType) ⇒
+          case _ if MediaTypes.isCdmiLike(contentType) ⇒
             badRequest(
               request,
               StdErrorRef.BR006,
-              s"Inappropriate '${HeaderNames.Content_Type}: $contentType' with the '${HeaderNames.X_CDMI_Specification_Version}' present. Should be '${HeaderNames.Content_Type}: ${ContentTypes.Application_CdmiObject}'"
+              s"Inappropriate '${HeaderNames.Content_Type}: $contentType' with the '${HeaderNames.X_CDMI_Specification_Version}' present. Should be '${HeaderNames.Content_Type}: ${MediaTypes.Application_CdmiObject}'"
             )
 
           case _ ⇒
             badRequest(
               request,
               StdErrorRef.BR010,
-              s"Inappropriate '${HeaderNames.Content_Type}: $contentType' with the '${HeaderNames.X_CDMI_Specification_Version}' present. Should be '${HeaderNames.Content_Type}: ${ContentTypes.Application_CdmiObject}'"
+              s"Inappropriate '${HeaderNames.Content_Type}: $contentType' with the '${HeaderNames.X_CDMI_Specification_Version}' present. Should be '${HeaderNames.Content_Type}: ${MediaTypes.Application_CdmiObject}'"
             )
         }
     }
@@ -484,30 +490,6 @@ trait CdmiRestService {
    */
   def GET_object_noncdmi(request: Request, objectPath: List[String]): Future[Response] =
     notImplemented(request)
-
-  /**
-   * Read the contents or value of a data object (depending on the presence of X-CDMI-Specification-Version).
-   */
-  def GET_object(request: Request, objectPath: List[String]): Future[Response] = {
-    val headers = request.headers()
-    val specVersion = headers.get(HeaderNames.X_CDMI_Specification_Version)
-    val accept = headers.get(HeaderNames.Accept)
-
-    specVersion match {
-      case null ⇒
-        GET_object_noncdmi(request, objectPath)
-
-      case _ if isCdmiObjectOrAnyAccept(request) ⇒
-        GET_object_cdmi(request, objectPath)
-
-      case _ ⇒
-        badRequest(
-          request,
-          StdErrorRef.BR004,
-          s"Requested object at ${request.path} with '${HeaderNames.X_CDMI_Specification_Version}: $specVersion' and '${HeaderNames.Accept}: $accept'"
-        )
-    }
-  }
   /////////////////////////////////////////////////////////////
   //- Read a data object //////////////////////////////////////
   /////////////////////////////////////////////////////////////
@@ -525,24 +507,11 @@ trait CdmiRestService {
 
   /**
    * Deletes a data object in a container using non-CDMI content type.
-   * The given `contentType` may be `null`.
    *
    * @note Section 8.9 of CDMI 1.0.2: Delete a Data Object using a Non-CDMI Content Type
    */
-  def DELETE_object_noncdmi(request: Request, objectPath: List[String], contentType: String): Future[Response] =
+  def DELETE_object_noncdmi(request: Request, objectPath: List[String]): Future[Response] =
     notImplemented(request)
-
-  /**
-   * Deletes a data object.
-   */
-  def DELETE_object(request: Request, objectPath: List[String]): Future[Response] =
-    request.headers().get(HeaderNames.Content_Type) match {
-      case ContentTypes.Application_CdmiObject ⇒
-        DELETE_object_cdmi(request, objectPath)
-
-      case contentType ⇒
-        DELETE_object_noncdmi(request, objectPath, contentType)
-    }
   /////////////////////////////////////////////////////////////
   //- Delete a data object ////////////////////////////////////
   /////////////////////////////////////////////////////////////
@@ -575,7 +544,7 @@ trait CdmiRestService {
    */
   def PUT_container(request: Request, containerPath: List[String]): Future[Response] =
     request.headers().get(HeaderNames.Content_Type) match {
-      case ContentTypes.Application_CdmiContainer ⇒
+      case MediaTypes.Application_CdmiContainer ⇒
         PUT_container_cdmi(request, containerPath)
 
       case contentType ⇒
@@ -612,14 +581,14 @@ trait CdmiRestService {
    */
   def GET_container(request: Request, containerPath: List[String]): Future[Response] = {
     val accept = request.headers().get(HeaderNames.Accept)
-    if(isCdmiContainerOrAnyAccept(request)) {
+    if(Accept.isCdmiContainerOrAny(request)) {
       GET_container_cdmi(request, containerPath)
     }
-    else if(isCdmiObjectAccept(request)) {
+    else if(Accept.isCdmiObject(request)) {
       response(
         request,
         Status.BadRequest,
-        StdContentType.Text_Plain,
+        StdMediaType.Text_Plain,
         s"Requested container at ${request.path} with '${HeaderNames.Accept}: $accept'"
       ).future
     }
@@ -722,7 +691,10 @@ trait CdmiRestService {
   def POST_queue_value_cdmi(request: Request, queuePath: List[String]): Future[Response] =
     notImplemented(request)
 
-  def PUT_queue_cdmi(request: Request, queuePath: List[String]): Future[Response] =
+  def PUT_queue_cdmi_create(request: Request, queuePath: List[String]): Future[Response] =
+    notImplemented(request)
+
+  def PUT_queue_cdmi_update(request: Request, queuePath: List[String]): Future[Response] =
     notImplemented(request)
 
   def DELETE_queue(request: Request, queuePath: List[String]): Future[Response] =
@@ -740,12 +712,7 @@ trait CdmiRestService {
    *
    * @note The relevant sections from CDMI 1.0.2 are 8.8, 11.5 and 11.7.
    */
-  def DELETE_object_or_queue_or_queuevalue_cdmi(
-    request: Request,
-    path: List[String],
-    isQueueAccept: Boolean,
-    isQueueContentType: Boolean
-  ): Future[Response]
+  def DELETE_object_or_queue_or_queuevalue_cdmi(request: Request, path: List[String]): Future[Response]
 
   def logBeginRequest(request: Request): Unit = {
     log.info(s"### BEGIN ${request.remoteSocketAddress} ${request.method} ${request.uri} ###")
@@ -758,6 +725,9 @@ trait CdmiRestService {
   def routingTable: PartialFunction[Request, Future[Response]] = {
     case request ⇒
       def NotAllowed() = notAllowed(request)
+      @inline def MANDATORY[T](t: T) = t // for documentation purposes; communicates spec-defined behavior
+      @inline def OPTIONAL [T](t: T) = t // for documentation purposes; communicates spec-defined behavior
+      @inline def HELPER   [T](t: T) = t // for documentation purposes; communicates not spec-defined behavior but one that is helping to understand the situation
 
       val headers = request.headers()
       val method = request.method
@@ -816,12 +786,11 @@ trait CdmiRestService {
         case ("" ::  "cdmi_capabilities" :: Nil, HAVE_NO_SLASH) ⇒
           // "/cdmi_capabilities"
           // Just being helpful here
-          response(
+          badRequest(
             request,
-            Status.BadRequest,
-            StdContentType.Text_Plain,
+            StdErrorRef.BR012,
             "Probably you meant to call /cdmi_capabilities/ instead of /cdmi_capabilities"
-          ).future
+          )
 
         case ("" :: "cdmi_objectid" :: objectIdPath, _) ⇒
           getObjectByIdPF(method, objectIdPath)
@@ -857,17 +826,23 @@ trait CdmiRestService {
             case _             ⇒ NotAllowed()
           }
 
-        case ("" :: objectPath, HAVE_NO_SLASH) ⇒
-          val contentType = request.headers().get(HeaderNames.Content_Type)
+        case ("" :: pathList /* for object or queue */, HAVE_NO_SLASH) ⇒
+          val hSpecVersion = headers.get(HeaderNames.X_CDMI_Specification_Version)
+          val hContentType = headers.get(HeaderNames.Content_Type)
+          val mediaType = request.mediaType.orNull // Content-Type without any baggage
+          val hAccept = headers.get(HeaderNames.Accept)
 
-          def handleObjects(): Future[Response] = {
-            method match {
-              case Method.Get    ⇒ GET_object   (request, objectPath)
-              case Method.Put    ⇒ PUT_object   (request, objectPath)
-              case Method.Delete ⇒ DELETE_object(request, objectPath)
-              case _             ⇒ NotAllowed()
-            }
-          }
+          val haveContentType = hContentType ne null
+          val haveSpecVersion = hSpecVersion ne null
+          val haveAccept = hAccept ne null
+
+          val isQueueContentType = MediaTypes.isCdmiQueue(mediaType)
+          val isObjectContentType = !isQueueContentType && MediaTypes.isCdmiObject(mediaType)
+          val isQueueAccept = Accept.isCdmiQueue(request)
+          val isObjectAccept = !isQueueAccept && Accept.isCdmiObject(request)
+          val isAnyAccept = !isQueueAccept && !isObjectAccept && Accept.isAny(request)
+
+          request.acceptMediaTypes
 
           // Separation of queues and data objects is not well defined
           // and this is an approximate solution/approach.
@@ -894,46 +869,168 @@ trait CdmiRestService {
           // The common requirement for queue operations is the presence of X-CDMI-Specification-Version
           // header and this is what we check first:
 
-          if(headers.contains(HeaderNames.X_CDMI_Specification_Version)) {
-            // possible queue-related request
-            val queuePath = objectPath
-            val isQueueContentType = ContentTypes.isCdmiQueue(contentType)
-            val isQueueAccept = isCdmiQueueAccept(request)
+          // Handles all cases when the header X-CDMI-Specification-Version is present
+          // That the version is valid must be guaranteed by the filters run before we reach here.
+          // This is true with the default setup.
+          def handleSpecVersion(): Future[Response] = {
+            method match {
+              //+ GET //////////////////////////////////////////////////////////////
+              case Method.Get if OPTIONAL(isQueueAccept) ⇒
+                // Section 11.3 Read a Queue Object using CDMI Content Type
+                GET_queue_cdmi(request, pathList)
 
-            if(method == Method.Put && isQueueContentType) {
-              if(isQueueAccept) {
+              case Method.Get if OPTIONAL(isObjectAccept) || HELPER(!haveAccept) ⇒
+                // If `Accept` is not present, we default to data objects.
+                // Section 8.4 Read a Data Object using CDMI Content Type
+                GET_object_cdmi(request, pathList)
+
+              case Method.Get if HELPER(Accept.isCdmiLike(request)) ⇒
+                badRequest(
+                  request,
+                  StdErrorRef.BR006,
+                  s"Bad use of '${HeaderNames.Accept}: $hAccept' with the '${HeaderNames.X_CDMI_Specification_Version}' present" +
+                  s". Should be '${HeaderNames.Accept}: ${MediaTypes.Application_CdmiObject}'" +
+                  s" or '${HeaderNames.Accept}: ${MediaTypes.Application_CdmiQueue}'"
+                )
+
+              case Method.Get if HELPER(haveAccept) ⇒
+                // There must be an irrelevant media type in `Accept`
+                badRequest(
+                  request,
+                  StdErrorRef.BR004,
+                  s"Bad use of '${HeaderNames.Accept}: $hAccept' with the '${HeaderNames.X_CDMI_Specification_Version}' present"
+                )
+              //- GET //////////////////////////////////////////////////////////////
+
+              //+ PUT //////////////////////////////////////////////////////////////
+              case Method.Put if MANDATORY(isQueueContentType) && MANDATORY(isQueueAccept) ⇒
                 // Section 11.2 Create a Queue Object using CDMI Content Type
-                PUT_queue_cdmi(request, queuePath)
-              }
-              else {
+                PUT_queue_cdmi_create(request, pathList)
+
+              case Method.Put if MANDATORY(isQueueContentType) ⇒
                 // Section 11.4 Update a Queue Object using CDMI Content Type
-                PUT_queue_cdmi(request, queuePath) // yes, same call as above
-              }
-            }
-            else if(method == Method.Get && isQueueAccept) {
-              // Section 11.3 Read a Queue Object using CDMI Content Type
-              GET_queue_cdmi(request, queuePath)
-            }
-            else if(method == Method.Delete) {
-              // No other way to understand if this is about a data object or a queue object or a queue object value
-              // Section  8.8 Delete a Data Object using CDMI Content Type
-              // Section 11.5 Delete a Queue Object using CDMI Content Type
-              // Section 11.7 Delete a Queue Object Value using CDMI Content Type
-              DELETE_object_or_queue_or_queuevalue_cdmi(request, objectPath /* queuePath */, isQueueAccept, isQueueContentType)
-            }
-            else if(method == Method.Post && isQueueContentType) {
-              // Section 11.6 Enqueue a New Queue Value using CDMI Content Type
-              POST_queue_value_cdmi(request, queuePath)
-            }
-            else {
-              // If not queue related, then it must be object related.
-              // TODO We could detect potential user intention for the queue APIs by checking
-              // TODO `isQueueAccept` and `isQueueContentType`
-              handleObjects()
+                PUT_queue_cdmi_update(request, pathList)
+
+              case Method.Put if MANDATORY(isObjectContentType) && OPTIONAL(isObjectAccept) ⇒
+                // Section 8.2 Create a Data Object Using CDMI Content Type
+                PUT_object_cdmi_create(request, pathList)
+
+              case Method.Put if MANDATORY(isObjectContentType) ⇒
+                // Section 8.2 Create a Data Object Using CDMI Content Type
+                // Section 8.6 Update a Data Object using CDMI Content Type
+                PUT_object_cdmi_create_or_update(request, pathList)
+
+              case Method.Put if MANDATORY(MediaTypes.isCdmiLike(mediaType)) ⇒
+                badRequest(
+                  request,
+                  StdErrorRef.BR006,
+                  s"Bad use of '${HeaderNames.Content_Type}: $hContentType' with the '${HeaderNames.X_CDMI_Specification_Version}' present" +
+                  s". Should be '${HeaderNames.Content_Type}: ${MediaTypes.Application_CdmiObject}'" +
+                  s" or '${HeaderNames.Content_Type}: ${MediaTypes.Application_CdmiQueue}'"
+                )
+
+              case Method.Put if MANDATORY(haveContentType) ⇒
+                // This is an irrelevant content type
+                badRequest(
+                  request,
+                  StdErrorRef.BR016,
+                  s"Bad use of '${HeaderNames.Content_Type}: $hContentType' with the '${HeaderNames.X_CDMI_Specification_Version}' present"
+                )
+
+              case Method.Put ⇒
+                badRequest(
+                  request,
+                  StdErrorRef.BR005,
+                  s"'${HeaderNames.Content_Type}' is not set"
+                )
+              //- PUT //////////////////////////////////////////////////////////////
+
+              //+ POST /////////////////////////////////////////////////////////////
+              case Method.Post if isQueueContentType ⇒
+                // Section 11.6 Enqueue a New Queue Value using CDMI Content Type
+                POST_queue_value_cdmi(request, pathList)
+
+              case Method.Post ⇒
+                NotAllowed()
+
+              //- POST /////////////////////////////////////////////////////////////
+
+              //+ DELETE ///////////////////////////////////////////////////////////
+              case Method.Delete ⇒
+                // No other way to understand if this is about a data object or a queue object or a queue object value
+                // Section  8.8 Delete a Data Object using CDMI Content Type
+                // Section 11.5 Delete a Queue Object using CDMI Content Type
+                // Section 11.7 Delete a Queue Object Value using CDMI Content Type
+                DELETE_object_or_queue_or_queuevalue_cdmi(request, pathList)
+
+              //- DELETE ///////////////////////////////////////////////////////////
+
+              case _ ⇒
+                NotAllowed()
             }
           }
-          else {
-            handleObjects()
+
+          // Handles all cases when the header X-CDMI-Specification-Version is absent.
+          def handleNoSpecVersion(): Future[Response] = {
+            method match {
+              //+ GET //////////////////////////////////////////////////////////////
+              case Method.Get if HELPER(isAnyAccept) || HELPER(!haveAccept) ⇒
+                // Section 8.5 Read a Data Object using a Non-CDMI Content Type
+                GET_object_noncdmi(request, pathList)
+
+              case Method.Get if HELPER(Accept.isCdmiLike(request)) ⇒
+                badRequest(
+                  request,
+                  StdErrorRef.BR013,
+                  s"Bad use of CDMI-aware '${HeaderNames.Accept}: $hAccept' without the presence of '${HeaderNames.X_CDMI_Specification_Version}'"
+                )
+
+              case Method.Get ⇒
+                // Let the implementation handle any other value for the `Accept` header.
+                // Section 8.5 Read a Data Object using a Non-CDMI Content Type
+                GET_object_noncdmi(request, pathList)
+              //- GET //////////////////////////////////////////////////////////////
+
+              //+ PUT //////////////////////////////////////////////////////////////
+              case Method.Put if MANDATORY(haveContentType) && MANDATORY(MediaTypes.isCdmiLike(mediaType)) ⇒
+                badRequest(
+                  request,
+                  StdErrorRef.BR014,
+                  s"Bad use of CDMI-aware '${HeaderNames.Content_Type}: $hContentType' without the presence of '${HeaderNames.X_CDMI_Specification_Version}'"
+                )
+
+              case Method.Put if MANDATORY(haveContentType) ⇒
+                  // Section 8.3 Create a Data Object using a Non-CDMI Content Type
+                  // Section 8.7 Update a Data Object using a Non-CDMI Content Type
+                  PUT_object_noncdmi(request, pathList, hContentType)
+
+              case Method.Put ⇒
+                badRequest(
+                  request,
+                  StdErrorRef.BR015,
+                  s"'${HeaderNames.Content_Type}' is not set"
+                )
+              //- PUT //////////////////////////////////////////////////////////////
+
+              //+ POST /////////////////////////////////////////////////////////////
+              case Method.Post ⇒
+                NotAllowed()
+              //- POST /////////////////////////////////////////////////////////////
+
+              //+ DELETE ///////////////////////////////////////////////////////////
+              case Method.Delete ⇒
+                // Section 8.9 Delete a Data Object using a Non-CDMI Content Type
+                DELETE_object_noncdmi(request, pathList)
+              //+ DELETE ///////////////////////////////////////////////////////////
+
+              case _ ⇒
+                NotAllowed()
+            }
+          }
+
+          haveSpecVersion match {
+            case true  ⇒ handleSpecVersion()
+            case false ⇒ handleNoSpecVersion()
           }
 
         case _ ⇒

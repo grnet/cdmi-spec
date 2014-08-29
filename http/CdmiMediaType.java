@@ -17,29 +17,29 @@
 
 package gr.grnet.cdmi.http;
 
-import gr.grnet.common.http.IContentType;
+import gr.grnet.common.http.IMediaType;
 
 /**
- * CDMI-specific content types.
+ * CDMI-specific media types.
  *
- * This is according to http://www.ietf.org/rfc/rfc6208.txt.
+ * The provided values are according to http://www.ietf.org/rfc/rfc6208.txt.
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-public enum CdmiContentType implements IContentType {
+public enum CdmiMediaType implements IMediaType {
     Application_CdmiCapability("application/cdmi-capability"),
     Application_CdmiContainer ("application/cdmi-container"),
     Application_CdmiDomain    ("application/cdmi-domain"),
     Application_CdmiObject    ("application/cdmi-object"),
     Application_CdmiQueue     ("application/cdmi-queue");
 
-    private final String contentType;
+    private final String value;
 
-    CdmiContentType(String contentType) {
-        this.contentType = contentType;
+    CdmiMediaType(String value) {
+        this.value = value;
     }
 
-    public String contentType() {
-        return this.contentType;
+    public String value() {
+        return this.value;
     }
 }
