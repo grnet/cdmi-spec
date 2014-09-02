@@ -57,7 +57,13 @@ object tokensURL    extends GlobalFlag[String]("https://accounts.okeanos.grnet.g
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-object StdCdmiPithosServer extends CdmiRestService with App with Logging {
+object StdCdmiPithosServer extends CdmiRestService
+  with App with Logging
+  with CdmiRestServiceTypes
+  with CdmiRestServiceHandlers
+  with CdmiRestServiceMethods
+  with CdmiRestServiceResponse {
+
   sealed trait PithosResult[+T]
   final case class GoodPithosResult[T](value: T) extends PithosResult[T]
   final case class BadPithosResult(status: HttpResponseStatus, extraInfo: String = "") extends PithosResult[Nothing]
@@ -757,6 +763,14 @@ object StdCdmiPithosServer extends CdmiRestService with App with Logging {
     }
   }
 
+
+  /**
+   * Creates a data object in a container using CDMI content type.
+   *
+   * @note Section 8.2 of CDMI 1.0.2: Create a Data Object Using CDMI Content Type
+   */
+  override def PUT_object_cdmi_create(request: Request, objectPath: List[String]): Future[Response] =
+    PUT_object_cdmi_create_or_update(request, objectPath)
 
   /**
    * Create a data object in a container using non-CDMI content type.
