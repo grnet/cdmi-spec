@@ -129,12 +129,20 @@ trait CdmiRestServiceMethods { self: CdmiRestService with CdmiRestServiceTypes w
   //+ Create/Update a container  //////////////////////////////
   /////////////////////////////////////////////////////////////
   /**
+   * Creates a container using CDMI content type.
+   *
+   * @note Section 9.2 of CDMI 1.0.2: Create a Container Object using CDMI Content Type
+   */
+  def PUT_container_cdmi_create(request: Request, containerPath: List[String]): Future[Response] =
+    notImplemented(request)
+
+  /**
    * Creates/updates a container using CDMI content type.
    *
    * @note Section 9.2 of CDMI 1.0.2: Create a Container Object using CDMI Content Type
    * @note Section 9.5 of CDMI 1.0.2: Update a Container Object using CDMI Content Type
    */
-  def PUT_container_cdmi(request: Request, containerPath: List[String]): Future[Response] =
+  def PUT_container_cdmi_create_or_update(request: Request, containerPath: List[String]): Future[Response] =
     notImplemented(request)
 
   /**
@@ -146,21 +154,23 @@ trait CdmiRestServiceMethods { self: CdmiRestService with CdmiRestServiceTypes w
    */
   def PUT_container_noncdmi(request: Request, containerPath: List[String], contentType: String): Future[Response] =
     notImplemented(request)
-
-  /**
-   * Creates a new container.
-   */
-  def PUT_container(request: Request, containerPath: List[String]): Future[Response] =
-    request.headers().get(HeaderNames.Content_Type) match {
-      case MediaTypes.Application_CdmiContainer ⇒
-        PUT_container_cdmi(request, containerPath)
-
-      case contentType ⇒
-        PUT_container_noncdmi(request, containerPath, contentType)
-    }
   /////////////////////////////////////////////////////////////
   //- Create/Update a container  //////////////////////////////
   /////////////////////////////////////////////////////////////
+
+
+  /////////////////////////////////////////////////////////////
+  //+ POST object/queue to container  /////////////////////////
+  /////////////////////////////////////////////////////////////
+  def POST_object_to_container_cdmi(request: Request, containerPath: List[String]): Future[Response] =
+    notImplemented(request)
+
+  def POST_queue_to_container_cdmi(request: Request, containerPath: List[String]): Future[Response] =
+    notImplemented(request)
+  /////////////////////////////////////////////////////////////
+  //- POST object/queue to container  /////////////////////////
+  /////////////////////////////////////////////////////////////
+
 
 
   /////////////////////////////////////////////////////////////
@@ -183,27 +193,6 @@ trait CdmiRestServiceMethods { self: CdmiRestService with CdmiRestServiceTypes w
    */
   def GET_container_noncdmi(request: Request, containerPath: List[String]): Future[Response] =
     notImplemented(request)
-
-  /**
-   * Lists the contents of a container.
-   */
-  def GET_container(request: Request, containerPath: List[String]): Future[Response] = {
-    val accept = request.headers().get(HeaderNames.Accept)
-    if(Accept.isCdmiContainerOrAny(request)) {
-      GET_container_cdmi(request, containerPath)
-    }
-    else if(Accept.isCdmiObject(request)) {
-      response(
-        request,
-        Status.BadRequest,
-        StdMediaType.Text_Plain,
-        s"Requested container at ${request.path} with '${HeaderNames.Accept}: $accept'"
-      ).future
-    }
-    else {
-      GET_container_noncdmi(request, containerPath)
-    }
-  }
   /////////////////////////////////////////////////////////////
   //- Read a container  ///////////////////////////////////////
   /////////////////////////////////////////////////////////////

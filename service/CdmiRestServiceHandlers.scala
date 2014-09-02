@@ -36,12 +36,117 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
   def handleContainerCall(request: Request, containerPath: List[String]): Future[Response] = {
     def NotAllowed() = notAllowed(request)
     val method = request.method
+    val headers = request.headers()
+    val hSpecVersion = headers.get(HeaderNames.X_CDMI_Specification_Version)
+    val hContentType = headers.get(HeaderNames.Content_Type)
+    val mediaType = request.mediaType.orNull // Content-Type without any baggage
+    val hAccept = headers.get(HeaderNames.Accept)
 
-    method match {
-      case Method.Get    ⇒ GET_container   (request, containerPath)
-      case Method.Put    ⇒ PUT_container   (request, containerPath)
-      case Method.Delete ⇒ DELETE_container(request, containerPath)
-      case _             ⇒ NotAllowed()
+    val haveContentType = hContentType ne null
+    val haveSpecVersion = hSpecVersion ne null
+    val haveAccept = hAccept ne null
+
+    val isContainerAccept = haveAccept && Accept.isCdmiContainer(request)
+    val isObjectAccept = !isContainerAccept && Accept.isCdmiObject(request)
+    val isAnyAccept =  !isObjectAccept && Accept.isAny(request)
+    val isQueueAccept = !isAnyAccept && Accept.isCdmiQueue(request)
+    val isContainerContentType = haveContentType && MediaTypes.isCdmiContainer(mediaType)
+    val isObjectContentType = !isContainerContentType && MediaTypes.isCdmiObject(mediaType)
+    val isQueueContentType = !isObjectContentType && MediaTypes.isCdmiQueue(mediaType)
+
+    def handleCdmiCall(): Future[Response] =
+      method match {
+        case Method.Get if OPTIONAL(isContainerAccept || isAnyAccept || !haveAccept) ⇒
+          GET_container_cdmi(request, containerPath)
+
+        case Method.Get if HELPER(Accept.isCdmiLike(request)) ⇒
+          badRequest(
+            request,
+            StdErrorRef.BR017,
+            s"Bad use of '${HeaderNames.Accept}: $hAccept' with the '${HeaderNames.X_CDMI_Specification_Version}' present" +
+            s". Should be '${HeaderNames.Accept}: ${MediaTypes.Application_CdmiContainer}'"
+          )
+
+        case Method.Get /*if HELPER(haveAccept) */⇒
+          badRequest(
+            request,
+            StdErrorRef.BR018,
+            s"Bad use of '${HeaderNames.Accept}: $hAccept' with the '${HeaderNames.X_CDMI_Specification_Version}' present" +
+            s". Should be '${HeaderNames.Accept}: ${MediaTypes.Application_CdmiContainer}'"
+          )
+
+        case Method.Put if MANDATORY(isContainerContentType) && OPTIONAL(isContainerAccept || isAnyAccept) ⇒
+          // Section 9.2 Create a Container Object using CDMI Content Type
+          PUT_container_cdmi_create(request, containerPath)
+
+        case Method.Put if MANDATORY(isContainerContentType) && OPTIONAL(!haveAccept) ⇒
+          // Section 9.2 Create a Container Object using CDMI Content Type
+          // Section 9.5 Update a Container Object using CDMI Content Type
+          PUT_container_cdmi_create_or_update(request, containerPath)
+
+        case Method.Put if MediaTypes.isCdmiLike(mediaType) ⇒
+          badRequest(
+            request,
+            StdErrorRef.BR019,
+            s"Bad use of '${HeaderNames.Content_Type}: $hContentType' with the '${HeaderNames.X_CDMI_Specification_Version}' present" +
+            s". Should be '${HeaderNames.Content_Type}: ${MediaTypes.Application_CdmiContainer}'"
+          )
+
+        case Method.Put if MANDATORY(haveContentType) ⇒
+          // This is an irrelevant content type
+          badRequest(
+            request,
+            StdErrorRef.BR020,
+            s"Bad use of '${HeaderNames.Content_Type}: $hContentType' with the '${HeaderNames.X_CDMI_Specification_Version}' present"
+          )
+
+        case Method.Put ⇒
+          badRequest(
+            request,
+            StdErrorRef.BR021,
+            s"'${HeaderNames.Content_Type}' is not set"
+          )
+
+        case Method.Post if MANDATORY(isObjectContentType) && OPTIONAL(isObjectAccept || isAnyAccept || !haveAccept) ⇒
+          // Section 9.8 Create (POST) a New Data Object using CDMI Content Type
+          POST_object_to_container_cdmi(request, containerPath)
+
+        case Method.Post if MANDATORY(isQueueContentType) && OPTIONAL(isQueueAccept || isAnyAccept || !haveAccept) ⇒
+          // Section 9.10 Create (POST) a New Queue Object using CDMI Content Type
+          POST_queue_to_container_cdmi(request, containerPath)
+
+        case Method.Post ⇒
+          // I could refine the errors more, just like I did with other cases but this manual procedure is getting
+          // tedious, it already is error prone and certainly is the wrong way to implement a specification, as far
+          // as I am concerned.
+          // We really need to derive an implementation automatically from the specification.
+          NotAllowed()
+
+        case Method.Delete ⇒
+          // Section 9.6 Delete a Container Object using CDMI Content Type
+          DELETE_container_cdmi(request, containerPath)
+
+        case _ ⇒
+          NotAllowed()
+      }
+
+    def handleNonCdmiCall(): Future[Response] =
+      method match {
+        case Method.Get ⇒
+          NotAllowed()
+        case Method.Put ⇒
+          NotAllowed()
+        case Method.Post ⇒
+          NotAllowed()
+        case Method.Delete ⇒
+          NotAllowed()
+        case _ ⇒
+          NotAllowed()
+      }
+
+    haveSpecVersion match {
+      case true  ⇒ handleCdmiCall()
+      case false ⇒ handleNonCdmiCall()
     }
   }
 
@@ -93,9 +198,7 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
     // Handles all cases when the header X-CDMI-Specification-Version is present
     // That the version is valid must be guaranteed by the filters run before we reach here.
     // This is true with the default setup.
-    def handleSpecVersion(): Future[Response] = {
-      def NotAllowed() = notAllowed(request)
-
+    def handleCdmiCall(): Future[Response] = {
       method match {
         //+ GET //////////////////////////////////////////////////////////////
         case Method.Get if OPTIONAL(isQueueAccept) ⇒
@@ -134,7 +237,7 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
           // Section 11.4 Update a Queue Object using CDMI Content Type
           PUT_queue_cdmi_update(request, pathList)
 
-        case Method.Put if MANDATORY(isObjectContentType) && OPTIONAL(isObjectAccept) ⇒
+        case Method.Put if MANDATORY(isObjectContentType) && OPTIONAL(isObjectAccept || isAnyAccept) ⇒
           // Section 8.2 Create a Data Object Using CDMI Content Type
           PUT_object_cdmi_create(request, pathList)
 
@@ -194,7 +297,7 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
     }
 
     // Handles all cases when the header X-CDMI-Specification-Version is absent.
-    def handleNoSpecVersion(): Future[Response] = {
+    def handleNonCdmiCall(): Future[Response] = {
       method match {
         //+ GET //////////////////////////////////////////////////////////////
         case Method.Get if HELPER(isAnyAccept) || HELPER(!haveAccept) ⇒
@@ -252,8 +355,8 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
     }
 
     haveSpecVersion match {
-      case true  ⇒ handleSpecVersion()
-      case false ⇒ handleNoSpecVersion()
+      case true  ⇒ handleCdmiCall()
+      case false ⇒ handleNonCdmiCall()
     }
   }
 

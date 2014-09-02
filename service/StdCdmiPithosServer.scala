@@ -367,7 +367,7 @@ object StdCdmiPithosServer extends CdmiRestService
   /**
    * Lists the contents of a container.
    */
-  override def GET_container(
+  def GET_container(
     request: Request, containerPath: List[String]
   ): Future[Response] = {
 
@@ -440,10 +440,7 @@ object StdCdmiPithosServer extends CdmiRestService
     }
   }
 
-  /**
-   * Creates a new container.
-   */
-  override def PUT_container(
+  def PUT_container_(
     request: Request, containerPath: List[String]
   ): Future[Response] = {
 
@@ -488,6 +485,28 @@ object StdCdmiPithosServer extends CdmiRestService
     }
   }
 
+
+  /**
+   * Creates a container using CDMI content type.
+   *
+   * @note Section 9.2 of CDMI 1.0.2: Create a Container Object using CDMI Content Type
+   */
+  override def PUT_container_cdmi_create(
+    request: Request, containerPath: List[String]
+  ): Future[Response] =
+    PUT_container_(request, containerPath)
+
+
+  /**
+   * Creates/updates a container using CDMI content type.
+   *
+   * @note Section 9.2 of CDMI 1.0.2: Create a Container Object using CDMI Content Type
+   * @note Section 9.5 of CDMI 1.0.2: Update a Container Object using CDMI Content Type
+   */
+  override def PUT_container_cdmi_create_or_update(
+    request: Request, containerPath: List[String]
+  ): Future[Response] =
+    PUT_container_(request, containerPath)
 
   /**
    * Deletes a container.
