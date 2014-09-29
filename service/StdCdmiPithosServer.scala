@@ -300,6 +300,9 @@ object StdCdmiPithosServer extends CdmiRestService
       case MediaTypes.Application_Directory | MediaTypes.Application_Folder ⇒
         s"$path/"
 
+      case MediaTypes.Application_CdmiContainer ⇒
+        s"$path/"
+
       case _ if contentType.startsWith(MediaTypes.Application_DirectorySemi) ||
                 contentType.startsWith(MediaTypes.Application_FolderSemi) ⇒
         s"$path/"
@@ -317,6 +320,7 @@ object StdCdmiPithosServer extends CdmiRestService
         if(result.isSuccess) {
           result.successData match {
             case Some(data) ⇒
+              log.debug(s"checkExistsObject('$container', '$folderPath') ⇒ $data")
               promise.setValue(GoodPithosResult(data.isDirectory || data.isContainer))
 
             case None ⇒
@@ -368,7 +372,7 @@ object StdCdmiPithosServer extends CdmiRestService
   /**
    * Lists the contents of a container.
    */
-  def GET_container(
+  override def GET_container_cdmi(
     request: Request, containerPath: List[String]
   ): Future[Response] = {
 
@@ -397,6 +401,7 @@ object StdCdmiPithosServer extends CdmiRestService
                 } yield {
                   // Pithos returns all the path part after the pithos container.
                   // Note that Pithos container is not the same as CDMI container.
+                  log.debug(s"Child: '${oip.container}/${oip.path}' = ${oip.contentType}")
                   val path = oip.path.lastIndexOf('/') match {
                     case -1 ⇒ oip.path
                     case i ⇒ oip.path.substring(i + 1)

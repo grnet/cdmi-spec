@@ -193,6 +193,7 @@ trait CdmiRestServiceMethods { self: CdmiRestService with CdmiRestServiceTypes w
    */
   def GET_container_noncdmi(request: Request, containerPath: List[String]): Future[Response] =
     notImplemented(request)
+
   /////////////////////////////////////////////////////////////
   //- Read a container  ///////////////////////////////////////
   /////////////////////////////////////////////////////////////

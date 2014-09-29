@@ -34,6 +34,7 @@ import gr.grnet.cdmi.http.{CdmiHeader, CdmiMediaType}
 import gr.grnet.cdmi.model.CapabilityModel
 import gr.grnet.common.http.{StdHeader, StdMediaType}
 import gr.grnet.common.text.{NormalizePath, PathToList}
+import gr.grnet.pithosj.core.http.PithosHeader
 import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
 import org.jboss.netty.handler.codec.http.{DefaultHttpResponse, HttpRequest, HttpResponse, HttpVersion}
 import org.jboss.netty.util.CharsetUtil.UTF_8
@@ -173,6 +174,7 @@ trait CdmiRestService { self: CdmiRestServiceTypes
 
   object HeaderNames {
     final val X_CDMI_Specification_Version = CdmiHeader.X_CDMI_Specification_Version.headerName()
+    final val X_Auth_Token = PithosHeader.X_Auth_Token.headerName()
     final val Content_Type = StdHeader.Content_Type.headerName()
     final val Accept = StdHeader.Accept.headerName()
     final val WWW_Authenticate = StdHeader.WWW_Authenticate.headerName()
@@ -277,12 +279,14 @@ trait CdmiRestService { self: CdmiRestServiceTypes
       val pathElementsDebugStr = pathElements.map(s ⇒ "\"" + s + "\"").mkString(" ") + (if(lastIsSlash) " [/]" else "")
       log.debug(s"(as list)  ${method.getName} $pathElementsDebugStr")
 
-      def logHeader(name: String): Unit = if(headers.contains(name) ) {
+      def logHeader(name: String, exact: Boolean = true): Unit = if(headers.contains(name) ) {
         val value = headers.get(name)
-        log.debug(s"'$name: $value'")
+        if(exact) { log.debug(s"'$name: $value'") }
+        else      { log.debug(s"'$name: ${value.substring(0, value.length / 3)}${"*" * (2 * value.length / 3)}'") }
       }
 
       logHeader(HeaderNames.X_CDMI_Specification_Version)
+      logHeader(HeaderNames.X_Auth_Token, exact = false)
       logHeader(HeaderNames.Content_Type)
       logHeader(HeaderNames.Accept)
 
@@ -292,40 +296,50 @@ trait CdmiRestService { self: CdmiRestServiceTypes
       (pathElements, lastIsSlash) match {
         case (Nil, _) ⇒
           // "/"
+          log.debug("handleRootCall")
           handleRootCall(request)
 
         case ("" :: Nil, _) ⇒
           // ""
+          log.debug("handleRootNoSlashCall")
           handleRootNoSlashCall(request)
 
         case ("" ::  "cdmi_capabilities" :: Nil, HAVE_SLASH) ⇒
           // "/cdmi_capabilities/"
+          log.debug("handleCapabilitiesCall")
           handleCapabilitiesCall(request)
 
         case ("" ::  "cdmi_capabilities" :: Nil, HAVE_NO_SLASH) ⇒
           // "/cdmi_capabilities"
+          log.debug("handleCapabilitiesNoSlashCall")
           handleCapabilitiesNoSlashCall(request)
 
         case ("" :: ("cdmi_objectid" | "cdmi_objectId" | "cdmi_objectID") :: objectIdPath, _) ⇒
+          log.debug("handleObjectByIdCall")
           handleObjectByIdCall(request, objectIdPath)
 
         case ("" ::  "cdmi_domains" :: domainPath, HAVE_SLASH) ⇒
           // "/cdmi_domains/"
+          log.debug("handleDomainCall")
           // According to Section 10.1 CDMI 1.0.2, this prefix is reserved for domain URIs
           handleDomainCall(request, domainPath)
 
         case ("" ::  "cdmi_domains" :: Nil, HAVE_NO_SLASH) ⇒
           // "/cdmi_domains"
+          log.debug("handleDomainNoSlashCall")
           handleDomainNoSlashCall(request)
 
         case ("" :: containerPath, HAVE_SLASH) ⇒
+          log.debug("handleContainerCall")
           // An ending slash means a container-related call
           handleContainerCall(request, containerPath)
 
         case ("" :: pathList /* for object or queue */, HAVE_NO_SLASH) ⇒
+          log.debug("handleObjectOrQueueCall")
           handleObjectOrQueueCall(request, pathList)
 
         case _ ⇒
+          log.debug("CATCHALL")
           NotAllowed()
       }
   }

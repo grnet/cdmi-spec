@@ -54,7 +54,7 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
     val isObjectContentType = !isContainerContentType && MediaTypes.isCdmiObject(mediaType)
     val isQueueContentType = !isObjectContentType && MediaTypes.isCdmiQueue(mediaType)
 
-    def handleCdmiCall(): Future[Response] =
+    def handleContainerCdmiCall(): Future[Response] =
       method match {
         case Method.Get if OPTIONAL(isContainerAccept || isAnyAccept || !haveAccept) ⇒
           GET_container_cdmi(request, containerPath)
@@ -130,7 +130,7 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
           NotAllowed()
       }
 
-    def handleNonCdmiCall(): Future[Response] =
+    def handleContainerNonCdmiCall(): Future[Response] =
       method match {
         case Method.Get ⇒
           NotAllowed()
@@ -145,8 +145,13 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
       }
 
     haveSpecVersion match {
-      case true  ⇒ handleCdmiCall()
-      case false ⇒ handleNonCdmiCall()
+      case true  ⇒
+        log.debug("handleContainerCdmiCall")
+        handleContainerCdmiCall()
+
+      case false ⇒
+        log.debug("handleContainerNonCdmiCall")
+        handleContainerNonCdmiCall()
     }
   }
 
@@ -198,7 +203,7 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
     // Handles all cases when the header X-CDMI-Specification-Version is present
     // That the version is valid must be guaranteed by the filters run before we reach here.
     // This is true with the default setup.
-    def handleCdmiCall(): Future[Response] = {
+    def handleObjectOrQueueCdmiCall(): Future[Response] = {
       method match {
         //+ GET //////////////////////////////////////////////////////////////
         case Method.Get if OPTIONAL(isQueueAccept) ⇒
@@ -297,7 +302,7 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
     }
 
     // Handles all cases when the header X-CDMI-Specification-Version is absent.
-    def handleNonCdmiCall(): Future[Response] = {
+    def handleObjectOrQueueNonCdmiCall(): Future[Response] = {
       method match {
         //+ GET //////////////////////////////////////////////////////////////
         case Method.Get if HELPER(isAnyAccept) || HELPER(!haveAccept) ⇒
@@ -355,8 +360,13 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
     }
 
     haveSpecVersion match {
-      case true  ⇒ handleCdmiCall()
-      case false ⇒ handleNonCdmiCall()
+      case true  ⇒
+        log.debug("handleObjectOrQueueCdmiCall")
+        handleObjectOrQueueCdmiCall()
+
+      case false ⇒
+        log.debug("handleObjectOrQueueNonCdmiCall")
+        handleObjectOrQueueNonCdmiCall()
     }
   }
 
