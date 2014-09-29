@@ -66,7 +66,7 @@ trait CdmiRestService { self: CdmiRestServiceTypes
 
   def isCdmiCapabilitiesUri(uri: String): Boolean = {
     val uriToCheck = if(isToleratingDoubleSlash) uri.normalizePath else uri
-    uriToCheck == "/cdmi_capabilities/"
+    (uriToCheck == "/cdmi_capabilities/") || (uriToCheck == "/cdmi_capabilities")
   }
 
   /**
