@@ -54,6 +54,7 @@ object authRedirect extends GlobalFlag[Boolean](true, "Redirect to 'authURL' if 
 object tokensURL    extends GlobalFlag[String]("https://accounts.okeanos.grnet.gr/identity/v2.0/tokens", "Used to obtain UUID from token")
 
 /**
+ * A Pithos-based implementation for the CDMI service
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
