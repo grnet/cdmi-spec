@@ -36,6 +36,7 @@ import gr.grnet.common.json.Json
 import gr.grnet.common.text.{NoTrailingSlash, ParentPath, RemovePrefix}
 import gr.grnet.pithosj.api.PithosApi
 import gr.grnet.pithosj.core.ServiceInfo
+import gr.grnet.pithosj.core.command.CheckExistsObjectResultData
 import gr.grnet.pithosj.core.keymap.PithosHeaderKeys
 import gr.grnet.pithosj.impl.asynchttp.PithosClientFactory
 import org.jboss.netty.buffer.ChannelBuffers
@@ -311,6 +312,9 @@ object StdCdmiPithosServer extends CdmiRestService
         path
     }
 
+  def isPithosFolderOrContainer(result: CheckExistsObjectResultData): Boolean =
+    result.isDirectory || result.isContainer
+
   def checkExistsPithosFolderOrContainer(serviceInfo: ServiceInfo, container: String, folderPath: String): Future[PithosResult[Boolean]] = {
     val promise = newResultPromise[Boolean]
     // beware that folderPath must not end in '/'.
@@ -321,7 +325,7 @@ object StdCdmiPithosServer extends CdmiRestService
           result.successData match {
             case Some(data) ⇒
               log.debug(s"checkExistsObject('$container', '$folderPath') ⇒ $data")
-              promise.setValue(GoodPithosResult(data.isDirectory || data.isContainer))
+              promise.setValue(GoodPithosResult(isPithosFolderOrContainer(data)))
 
             case None ⇒
               promise.setValue(GoodPithosResult(false))
