@@ -210,8 +210,8 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
           // Section 11.3 Read a Queue Object using CDMI Content Type
           GET_queue_cdmi(request, pathList)
 
-        case Method.Get if OPTIONAL(isObjectAccept) || HELPER(!haveAccept) ⇒
-          // If `Accept` is not present, we default to data objects.
+        case Method.Get if OPTIONAL(isObjectAccept || isAnyAccept) || HELPER(!haveAccept) ⇒
+          // If `Accept` is not present or it is '*/*', we default to data objects.
           // Section 8.4 Read a Data Object using CDMI Content Type
           GET_object_cdmi(request, pathList)
 
