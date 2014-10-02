@@ -19,7 +19,7 @@ package gr.grnet.cdmi.service
 
 import com.twitter.finagle.http.Status
 import com.twitter.util.Future
-import gr.grnet.common.http.StdMediaType
+import gr.grnet.cdmi.http.CdmiMediaType
 import gr.grnet.common.json.Json
 
 /**
@@ -31,10 +31,10 @@ trait CdmiRestServiceMethods { self: CdmiRestService with CdmiRestServiceTypes w
    * Return the capabilities of this CDMI implementation.
    */
   def GET_capabilities(request: Request): Future[Response] = {
-    val caps = rootCapabilities
+    val caps = systemWideCapabilities
     val jsonCaps = Json.objectToJsonString(caps)
 
-    response(request, Status.Ok, StdMediaType.Text_Plain, jsonCaps).future
+    response(request, Status.Ok, CdmiMediaType.Application_CdmiCapability, jsonCaps).future
   }
 
   def GET_objectById(request: Request, objectIdPath: List[String]): Future[Response] =
@@ -57,7 +57,6 @@ trait CdmiRestServiceMethods { self: CdmiRestService with CdmiRestServiceTypes w
    */
   def PUT_object_cdmi_create_or_update(request: Request, objectPath: List[String]): Future[Response] =
     notImplemented(request)
-
   /**
    * Creates a data object in a container using CDMI content type.
    *

@@ -30,6 +30,7 @@ import com.twitter.finagle.ssl.Ssl
 import com.twitter.finagle.{Filter, Http, ServerCodecConfig, http}
 import com.twitter.logging.Logger
 import com.twitter.util.{Await, Future, FutureTransformer}
+import gr.grnet.cdmi.capability.SystemWideCapability
 import gr.grnet.cdmi.http.{CdmiHeader, CdmiMediaType}
 import gr.grnet.cdmi.model.CapabilityModel
 import gr.grnet.common.http.{StdHeader, StdMediaType}
@@ -247,7 +248,13 @@ trait CdmiRestService { self: CdmiRestServiceTypes
     }
   }
 
-  val rootCapabilities: CapabilityModel = CapabilityModel.rootOf()
+  val defaultSystemWideCapabilities = CapabilityModel.rootOf(
+    capabilities = CapabilityModel.booleanCapabilitiesMap(
+      SystemWideCapability.cdmi_dataobjects
+    )
+  )
+
+  def systemWideCapabilities: CapabilityModel = defaultSystemWideCapabilities
 
   def logBeginRequest(request: Request): Unit = {
     log.info(s"### BEGIN ${request.remoteSocketAddress} ${request.method} ${request.uri} ###")
