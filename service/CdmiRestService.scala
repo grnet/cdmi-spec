@@ -249,8 +249,9 @@ trait CdmiRestService { self: CdmiRestServiceTypes
   }
 
   val defaultSystemWideCapabilities = CapabilityModel.rootOf(
-    capabilities = CapabilityModel.booleanCapabilitiesMap(
-      SystemWideCapability.cdmi_dataobjects
+    capabilities = Map(
+      SystemWideCapability.cdmi_dataobjects → true.toString,
+      SystemWideCapability.cdmi_metadata_maxitems → 0.toString // TODO no metadata currently supported
     )
   )
 
