@@ -20,6 +20,7 @@ package gr.grnet.cdmi.service
 import com.twitter.finagle.http
 import com.twitter.finagle.http.Status
 import com.twitter.util.Future
+import gr.grnet.cdmi.http.CdmiMediaType
 import gr.grnet.common.http.{IMediaType, StdMediaType}
 import org.jboss.netty.buffer.ChannelBuffers._
 import org.jboss.netty.handler.codec.http.{DefaultHttpResponse, HttpResponseStatus}
@@ -131,4 +132,17 @@ trait CdmiRestServiceResponse { self: CdmiRestService with CdmiRestServiceTypes 
     devbody: CharSequence = ""
   ): Future[Response] =
     appJson(request, Status.Ok, body, devbody)
+
+  def okAppCdmiObject(
+    request: Request,
+    body: CharSequence,
+    devbody: CharSequence = ""
+  ): Future[Response] =
+    response(
+      request,
+      Status.Ok,
+      CdmiMediaType.Application_CdmiObject,
+      body = body,
+      devbody = devbody
+    ).future
 }

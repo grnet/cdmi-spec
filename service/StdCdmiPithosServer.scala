@@ -630,7 +630,7 @@ object StdCdmiPithosServer extends CdmiRestService
         val jsonModel = Json.objectToJsonString(model)
         file.deleteAnyway()
 
-        okJson(request, jsonModel)
+        okAppCdmiObject(request, jsonModel)
     }
   }
 
