@@ -254,7 +254,7 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
         case Method.Put if MANDATORY(MediaTypes.isCdmiLike(mediaType)) ⇒
           badRequest(
             request,
-            StdErrorRef.BR006,
+            StdErrorRef.BR007,
             s"Bad use of '${HeaderNames.Content_Type}: $hContentType' with the '${HeaderNames.X_CDMI_Specification_Version}' present" +
               s". Should be '${HeaderNames.Content_Type}: ${MediaTypes.Application_CdmiObject}'" +
               s" or '${HeaderNames.Content_Type}: ${MediaTypes.Application_CdmiQueue}'"
