@@ -41,4 +41,5 @@ public enum PithosErrorRef implements IErrorRef {
     PIE006,
     PIE007,
     PIE008,
+    PIE009,
 }

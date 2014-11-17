@@ -235,7 +235,7 @@ object StdCdmiPithosServer extends CdmiRestService
 
             case Throw(t) ⇒
               log.error(s"Calling ${tokensURL()}")
-              internalServerError(request, t, PithosErrorRef.PIE001)
+              internalServerError(request, t, PithosErrorRef.PIE009)
           }
 
         case uuid if uuid ne null ⇒
