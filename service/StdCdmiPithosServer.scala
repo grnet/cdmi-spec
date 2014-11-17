@@ -347,7 +347,9 @@ object StdCdmiPithosServer extends CdmiRestService
     (container, path)
   }
 
-  def completeToPromise(sFuture: scala.concurrent.Future[TResult[Unit]], tPromise: Promise[PithosResult[Unit]]): Unit = {
+  def completeToPromise(sFuture: scala.concurrent.Future[TResult[Unit]]): Promise[PithosResult[Unit]] = {
+    val tPromise = newResultPromise[Unit]
+
     sFuture.onComplete {
       case Success(result) ⇒
         if(result.isSuccess) {
@@ -360,7 +362,12 @@ object StdCdmiPithosServer extends CdmiRestService
       case Failure(t) ⇒
         tPromise.setException(t)
     }
+
+    tPromise
   }
+
+  def completeToPromiseAndTransform[B](sFuture: scala.concurrent.Future[TResult[Unit]])(transform: com.twitter.util.Try[PithosResult[Unit]] ⇒ Future[B]): Future[B] =
+    completeToPromise(sFuture).transform(transform)
 
 
   /**
@@ -455,16 +462,13 @@ object StdCdmiPithosServer extends CdmiRestService
   ): Future[Response] = {
 
     val serviceInfo = getPithosServiceInfo(request)
-    val promise = newResultPromise[Unit]
     val container = containerPath.head
     val isContainerRoot = containerPath.tail.isEmpty
     val path = containerPath.tail mkString "/" match { case "" ⇒ "/"; case s ⇒ "/" + s }
     // FIXME If the folder does not exist, the result here is just an empty folder
     val sf_result = pithos.createDirectory(serviceInfo, container, path)
 
-    completeToPromise(sf_result, promise)
-
-    promise.transform {
+    completeToPromiseAndTransform(sf_result) {
       case Return(GoodPithosResult(_)) ⇒
 
         val requestPath = request.uri
@@ -526,14 +530,11 @@ object StdCdmiPithosServer extends CdmiRestService
   ): Future[Response] = {
 
     val serviceInfo = getPithosServiceInfo(request)
-    val promise = newResultPromise[Unit]
     val container = containerPath.head
     val path = containerPath.tail mkString "/" match { case "" ⇒ "/"; case s ⇒ "/" + s }
     val sf_result = pithos.deleteDirectory(serviceInfo, container, path)
 
-    completeToPromise(sf_result, promise)
-
-    promise.transform {
+    completeToPromiseAndTransform(sf_result) {
       case Return(GoodPithosResult(_)) ⇒
         okTextPlain(request)
 
@@ -671,7 +672,6 @@ object StdCdmiPithosServer extends CdmiRestService
   ): Future[Response] = {
 
     val serviceInfo = getPithosServiceInfo(request)
-    val promise = newResultPromise[Unit]
     val (container, path) = splitPithosContainerAndPath(objectPath)
 
     val content = request.contentString
@@ -758,9 +758,8 @@ object StdCdmiPithosServer extends CdmiRestService
     }
 
     val sf_result = pithos.putObject(serviceInfo, container, path, bytes, mimetype)
-    completeToPromise(sf_result, promise)
 
-    promise.transform {
+    completeToPromiseAndTransform(sf_result) {
       case Return(GoodPithosResult(_)) ⇒
         val size = bytes.length
         val requestPath = request.path
@@ -810,14 +809,12 @@ object StdCdmiPithosServer extends CdmiRestService
   ): Future[Response] = {
 
     val serviceInfo = getPithosServiceInfo(request)
-    val promise = newResultPromise[Unit]
     val (container, path) = splitPithosContainerAndPath(objectPath)
 
     val payload = request.getContent()
     val sf_result = pithos.putObject(serviceInfo, container, path, payload, contentType)
-    completeToPromise(sf_result, promise)
 
-    promise.transform {
+    completeToPromiseAndTransform(sf_result) {
       case Return(GoodPithosResult(_)) ⇒
         okTextPlain(request)
 
@@ -834,13 +831,11 @@ object StdCdmiPithosServer extends CdmiRestService
    */
   def DELETE_object_(request: Request, objectPath: List[String]): Future[Response] = {
     val serviceInfo = getPithosServiceInfo(request)
-    val promise = newResultPromise[Unit]
     val (container, path) = splitPithosContainerAndPath(objectPath)
 
     val sf_result = pithos.deleteFile(serviceInfo, container, path)
-    completeToPromise(sf_result, promise)
 
-    promise.transform {
+    completeToPromiseAndTransform(sf_result) {
       case Return(GoodPithosResult(_)) ⇒
         okTextPlain(request)
 
