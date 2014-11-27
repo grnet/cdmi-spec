@@ -356,7 +356,8 @@ object StdCdmiPithosServer extends CdmiRestService
           tPromise.setValue(GoodPithosResult(()))
         }
         else {
-          tPromise.setValue(BadPithosResult(HttpResponseStatus.valueOf(result.statusCode)))
+          val errorDetails = result.errorDetails.getOrElse("")
+          tPromise.setValue(BadPithosResult(HttpResponseStatus.valueOf(result.statusCode), extraInfo = errorDetails))
         }
 
       case Failure(t) ⇒
