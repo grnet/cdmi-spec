@@ -145,4 +145,17 @@ trait CdmiRestServiceResponse { self: CdmiRestService with CdmiRestServiceTypes 
       body = body,
       devbody = devbody
     ).future
+
+  def okAppCdmiContainer(
+    request: Request,
+    body: CharSequence,
+    devbody: CharSequence = ""
+  ): Future[Response] =
+    response(
+      request,
+      Status.Ok,
+      CdmiMediaType.Application_CdmiContainer,
+      body = body,
+      devbody = devbody
+    ).future
 }

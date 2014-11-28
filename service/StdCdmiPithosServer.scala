@@ -486,7 +486,7 @@ object StdCdmiPithosServer extends CdmiRestService
           children = children
         )
         val jsonContainer = Json.objectToJsonString(container)
-        okJson(request, jsonContainer)
+        okAppCdmiContainer(request, jsonContainer)
 
       case Return(bpr @ BadPithosResult(status, extraInfo)) ⇒
         badRequest(
