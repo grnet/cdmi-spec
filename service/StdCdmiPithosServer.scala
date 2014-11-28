@@ -522,11 +522,8 @@ object StdCdmiPithosServer extends CdmiRestService
     request: Request, containerPath: List[String]
   ): Future[Response] =
     PUT_container_(request, containerPath)
-
-  /**
-   * Deletes a container.
-   */
-  override def DELETE_container(
+  
+  def DELETE_container_(
     request: Request, containerPath: List[String]
   ): Future[Response] = {
 
@@ -546,6 +543,24 @@ object StdCdmiPithosServer extends CdmiRestService
         internalServerError(request, t, PithosErrorRef.PIE004)
     }
   }
+
+  /**
+   * Deletes a container using a CDMI content type.
+   *
+   * @note Section 9.6 of CDMI 1.0.2: Delete a Container Object using CDMI Content Type
+   */
+  override def DELETE_container_cdmi(
+    request: Request, containerPath: List[String]
+  ): Future[Response] = DELETE_container_(request, containerPath)
+
+  /**
+   * Deletes a container using a non-CDMI content type.
+   *
+   * @note Section 9.7 of CDMI 1.0.2: Delete a Container Object using a Non-CDMI Content Type
+   */
+  override def DELETE_container_noncdmi(
+    request: Request, containerPath: List[String]
+  ): Future[Response] = DELETE_container_(request, containerPath)
 
   def GET_object_(
     request: Request,

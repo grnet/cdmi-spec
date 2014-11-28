@@ -217,21 +217,6 @@ trait CdmiRestServiceMethods { self: CdmiRestService with CdmiRestServiceTypes w
    */
   def DELETE_container_noncdmi(request: Request, containerPath: List[String]): Future[Response] =
     notImplemented(request)
-
-  /**
-   * Deletes a container. In particular,
-   * according to sections 9.6 and 9.7 of CDMI version 1.0.2, the
-   * presence of `X-CDMI-Specification-Version` is what designates
-   * the request as being of CDMI content type.
-   */
-  def DELETE_container(request: Request, containerPath: List[String]): Future[Response] =
-    request.headers().get(HeaderNames.X_CDMI_Specification_Version) match {
-      case null ⇒
-        DELETE_container_noncdmi(request, containerPath)
-
-      case _ ⇒
-        DELETE_container_cdmi(request, containerPath)
-    }
   /////////////////////////////////////////////////////////////
   //- Delete a container  /////////////////////////////////////
   /////////////////////////////////////////////////////////////
