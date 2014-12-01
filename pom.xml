@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (C) 2010-2014 GRNET S.A.
+  ~
+  ~ This program is free software: you can redistribute it and/or modify
+  ~ it under the terms of the GNU General Public License as published by
+  ~ the Free Software Foundation, either version 3 of the License, or
+  ~ (at your option) any later version.
+  ~
+  ~ This program is distributed in the hope that it will be useful,
+  ~ but WITHOUT ANY WARRANTY; without even the implied warranty of
+  ~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  ~ GNU General Public License for more details.
+  ~
+  ~ You should have received a copy of the GNU General Public License
+  ~ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>gr.grnet</groupId>
+  <artifactId>cdmi-spec</artifactId>
+  <version>0.2.0</version>
+
+  <!-- Project details-->
+  <name>cdmi-spec</name>
+  <description>
+    CDMI/v1.0.2 Skeleton Server
+  </description>
+  <url>https://github.com/grnet/pithos-j</url>
+  <inceptionYear>2014</inceptionYear>
+  <organization>
+    <name>GRNET</name>
+    <url>http://www.grnet.gr/</url>
+  </organization>
+
+  <developers>
+    <developer>
+      <id>loverdos</id>
+      <name>Christos KK Loverdos</name>
+      <email>loverdos@grnet.gr</email>
+    </developer>
+  </developers>
+
+  <!--Common project settings-->
+  <properties>
+    <scala.version>2.10.3</scala.version>
+    <finagle.version>6.20.0</finagle.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>${project.build.sourceEncoding}</project.reporting.outputEncoding>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.scala-lang</groupId>
+      <artifactId>scala-library</artifactId>
+      <version>${scala.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.ning</groupId>
+      <artifactId>async-http-client</artifactId>
+      <version>1.7.23</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>netty</artifactId>
+          <groupId>io.netty</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>com.ckkloverdos</groupId>
+      <artifactId>typedkey</artifactId>
+      <version>0.7.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-core</artifactId>
+      <version>2.3.2</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.3.2</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.fasterxml.jackson.module</groupId>
+      <artifactId>jackson-module-scala_2.10</artifactId>
+      <version>2.3.2</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>finagle-core_2.10</artifactId>
+      <version>${finagle.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>finagle-http_2.10</artifactId>
+      <version>${finagle.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>util-app_2.10</artifactId>
+      <version>${finagle.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>util-logging_2.10</artifactId>
+      <version>${finagle.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.11</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+      <version>1.1.1</version>
+      <!--<scope>test</scope>-->
+    </dependency>
+  </dependencies>
+
+  <!--Build configuration-->
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>net.alchim31.maven</groupId>
+        <artifactId>scala-maven-plugin</artifactId>
+        <version>3.2.0</version>
+        <configuration>
+          <recompileMode>incremental</recompileMode>
+          <!--<compileOrder>JavaThenScala</compileOrder>-->
+          <javacArgs>
+            <javacArg>-Xlint:unchecked</javacArg>
+            <javacArg>-Xlint:deprecation</javacArg>
+          </javacArgs>
+
+          <charset>${project.build.sourceEncoding}</charset>
+
+          <jvmArgs>
+            <jvmArg>-Xmx1024m</jvmArg>
+          </jvmArgs>
+
+          <args>
+            <arg>-deprecation</arg>
+            <arg>-unchecked</arg>
+            <arg>-explaintypes</arg>
+          </args>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>compile</goal>
+              <goal>testCompile</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Make sure tests display failures at the console-->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>2.12.4</version>
+        <configuration>
+          <useFile>false</useFile>
+          <reportFormat>plain</reportFormat>
+        </configuration>
+      </plugin>
+
+      <!-- Bundle up source code on release/snapshot -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>2.2.1</version>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals>
+              <goal>jar-no-fork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Release plug-in configuration -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-release-plugin</artifactId>
+        <version>2.3.2</version>
+        <configuration>
+          <preparationGoals>clean verify</preparationGoals>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
