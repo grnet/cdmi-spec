@@ -35,7 +35,6 @@ import gr.grnet.cdmi.http.{CdmiHeader, CdmiMediaType}
 import gr.grnet.cdmi.model.CapabilityModel
 import gr.grnet.common.http.{StdHeader, StdMediaType}
 import gr.grnet.common.text.{NormalizePath, PathToList}
-import gr.grnet.pithosj.core.http.PithosHeader
 import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
 import org.jboss.netty.handler.codec.http.{DefaultHttpResponse, HttpRequest, HttpResponse, HttpVersion}
 import org.jboss.netty.util.CharsetUtil.UTF_8
@@ -174,7 +173,6 @@ trait CdmiRestService { self: CdmiRestServiceTypes
 
   object HeaderNames {
     final val X_CDMI_Specification_Version = CdmiHeader.X_CDMI_Specification_Version.headerName()
-    final val X_Auth_Token = PithosHeader.X_Auth_Token.headerName()
     final val Content_Type = StdHeader.Content_Type.headerName()
     final val Accept = StdHeader.Accept.headerName()
     final val WWW_Authenticate = StdHeader.WWW_Authenticate.headerName()
@@ -293,7 +291,6 @@ trait CdmiRestService { self: CdmiRestServiceTypes
       }
 
       logHeader(HeaderNames.X_CDMI_Specification_Version)
-      logHeader(HeaderNames.X_Auth_Token, exact = false)
       logHeader(HeaderNames.Content_Type)
       logHeader(HeaderNames.Accept)
 
