@@ -23,7 +23,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>gr.grnet</groupId>
   <artifactId>cdmi-spec</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0-SNAPSHOT</version>
 
   <!-- Project details-->
   <name>cdmi-spec</name>
@@ -47,7 +47,9 @@
 
   <!--Common project settings-->
   <properties>
-    <scala.version>2.10.3</scala.version>
+    <scala.version>2.10.4</scala.version>
+    <snfcommonj.version>0.3.0-SNAPSHOT</snfcommonj.version>
+    <snfpithosj.version>0.3.0-SNAPSHOT</snfpithosj.version>
     <finagle.version>6.20.0</finagle.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>${project.build.sourceEncoding}</project.reporting.outputEncoding>
@@ -58,6 +60,18 @@
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-library</artifactId>
       <version>${scala.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>gr.grnet</groupId>
+      <artifactId>snf-common-j</artifactId>
+      <version>${snfcommonj.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>gr.grnet</groupId>
+      <artifactId>pithosj</artifactId>
+      <version>${snfpithosj.version}</version>
     </dependency>
 
     <dependency>
