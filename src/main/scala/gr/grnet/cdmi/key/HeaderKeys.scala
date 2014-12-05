@@ -15,10 +15,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package gr.grnet.cdmi.keymap
+package gr.grnet.cdmi.key
 
-import gr.grnet.common.keymap.HeaderKey
 import gr.grnet.cdmi.http.CdmiHeader
+import gr.grnet.common.key.HeaderKey
 
 
 object HeaderKeys {
