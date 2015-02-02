@@ -13,6 +13,8 @@ So, let's say you want to develop CDMI connector for your storage service. These
 Please install Java 7, maven 3.2+, scala 2.10.4.
 
 ## Install dependencies
+
+### typedkey
 This is a manual step to install a dependency that has not been published to Maven Central:
 
 ```
@@ -22,16 +24,18 @@ $ mvn install
 ```
 
 `cdmi-spec` currently relies on version `0.8.0-SNAPSHOT` of the
-`typedkey` library. ~~The last commit we have verified everything is OK is [aea16aace0585b8711f2a8bcddc4006de4216873](https://github.com/loverdos/typedkey/commit/aea16aace0585b8711f2a8bcddc4006de4216873)~~ (Please comment the following lines 
-
-```
-object TKey {
- def ofString(name: String)
-}
-```
-in `src/main/scala/typedkey/TKey.scala` and everything will compile)
+`typedkey` library. The last commit we have verified everything is OK is [20d26d15f1ffb74409f80e43fd1dd739fc30a1eb](https://github.com/loverdos/typedkey/commit/20d26d15f1ffb74409f80e43fd1dd739fc30a1eb)
 
 The above step will install the library in your local maven cache. This is usually under the `.m2` folder in your home folder.
+
+### snf-common-j
+Another library that needs to be pulled separately.
+
+```
+$ git clone https://github.com/grnet/snf-common-j
+$ cd snf-common-j
+$ mvn install
+```
 
 
 ## Clone the repo
