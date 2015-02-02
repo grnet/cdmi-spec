@@ -22,7 +22,14 @@ $ mvn install
 ```
 
 `cdmi-spec` currently relies on version `0.8.0-SNAPSHOT` of the
-`typedkey` library. The last commit we have verified everything is OK is [aea16aace0585b8711f2a8bcddc4006de4216873](https://github.com/loverdos/typedkey/commit/aea16aace0585b8711f2a8bcddc4006de4216873)
+`typedkey` library. ~~The last commit we have verified everything is OK is [aea16aace0585b8711f2a8bcddc4006de4216873](https://github.com/loverdos/typedkey/commit/aea16aace0585b8711f2a8bcddc4006de4216873)~~ (Please comment the following lines 
+
+```
+object TKey {
+ def ofString(name: String)
+}
+```
+in `src/main/scala/typedkey/TKey.scala` and everything will compile)
 
 The above step will install the library in your local maven cache. This is usually under the `.m2` folder in your home folder.
 
