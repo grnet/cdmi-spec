@@ -17,7 +17,7 @@
 
 package gr.grnet.cdmi
 
-import com.twitter.finagle.http.Response
+import com.twitter.finagle.httpx.Response
 import com.twitter.util.Future
 
 package object service {

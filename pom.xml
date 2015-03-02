@@ -23,7 +23,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>gr.grnet</groupId>
   <artifactId>cdmi-spec</artifactId>
-  <version>0.3.0-SNAPSHOT</version>
+  <version>0.4.0</version>
 
   <!-- Project details-->
   <name>cdmi-spec</name>
@@ -47,10 +47,10 @@
 
   <!--Common project settings-->
   <properties>
-    <scala.version>2.10.4</scala.version>
+    <scala.version>2.11.4</scala.version>
     <snfcommonj.version>0.3.0-SNAPSHOT</snfcommonj.version>
     <jackson.version>2.4.3</jackson.version>
-    <finagle.version>6.22.0</finagle.version>
+    <finagle.version>6.24.1-MONOCACHE</finagle.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>${project.build.sourceEncoding}</project.reporting.outputEncoding>
   </properties>
@@ -88,32 +88,32 @@
 
     <dependency>
       <groupId>com.fasterxml.jackson.module</groupId>
-      <artifactId>jackson-module-scala_2.10</artifactId>
+      <artifactId>jackson-module-scala_2.11</artifactId>
       <version>${jackson.version}</version>
     </dependency>
 
     <dependency>
       <groupId>com.twitter</groupId>
-      <artifactId>finagle-core_2.10</artifactId>
+      <artifactId>finagle-core_2.11</artifactId>
       <version>${finagle.version}</version>
     </dependency>
 
     <dependency>
       <groupId>com.twitter</groupId>
-      <artifactId>finagle-http_2.10</artifactId>
+      <artifactId>finagle-httpx_2.11</artifactId>
       <version>${finagle.version}</version>
     </dependency>
 
     <dependency>
       <groupId>com.twitter</groupId>
-      <artifactId>util-app_2.10</artifactId>
-      <version>${finagle.version}</version>
+      <artifactId>util-app_2.11</artifactId>
+      <version>6.23.0</version>
     </dependency>
 
     <dependency>
       <groupId>com.twitter</groupId>
-      <artifactId>util-logging_2.10</artifactId>
-      <version>${finagle.version}</version>
+      <artifactId>util-logging_2.11</artifactId>
+      <version>6.23.0</version>
     </dependency>
 
     <dependency>

@@ -17,25 +17,24 @@
 
 package gr.grnet.cdmi.service
 
-import com.twitter.finagle.http
-import com.twitter.finagle.http.Status
+import java.nio.charset.StandardCharsets
+
+import com.twitter.finagle.httpx.Status
+import com.twitter.io.Buf
 import com.twitter.util.Future
 import gr.grnet.cdmi.http.CdmiMediaType
 import gr.grnet.common.http.{IMediaType, StdMediaType}
-import org.jboss.netty.buffer.ChannelBuffers._
-import org.jboss.netty.handler.codec.http.{DefaultHttpResponse, HttpResponseStatus}
-import org.jboss.netty.util.CharsetUtil._
 
 trait CdmiRestServiceResponse { self: CdmiRestService with CdmiRestServiceTypes ⇒
   def response(
     request: Request,
-    status: HttpResponseStatus,
+    status: Status,
     contentType: IMediaType,
     body: CharSequence = "",
     devbody: CharSequence = ""
   ): Response = {
 
-    val statusCode = status.getCode
+    val statusCode = status.code
     if(dev() && devbody.length() > 0) {
       log.info(devbody.toString)
     }
@@ -46,22 +45,22 @@ trait CdmiRestServiceResponse { self: CdmiRestService with CdmiRestServiceTypes 
       log.info(s"$status, '${HeaderNames.Content_Type}: ${contentType.value()}', '${HeaderNames.Content_Length}: ${body.length()}'")
     }
 
-    val httpResponse = new DefaultHttpResponse(request.getProtocolVersion(), status)
-    val response = http.Response(httpResponse)
-
-    response.headers().set(HeaderNames.X_CDMI_Specification_Version, currentCdmiVersion)
-
-    val bodyChannelBuffer = copiedBuffer(body, UTF_8)
+    val response = request.response
+    response.status = status
+    response.headerMap.add(HeaderNames.X_CDMI_Specification_Version, currentCdmiVersion)
     response.contentType = contentType.value()
-    response.contentLength = bodyChannelBuffer.readableBytes()
-    response.content = bodyChannelBuffer
+
+    val bytes = body.toString.getBytes(StandardCharsets.UTF_8)
+    val buf = Buf.ByteArray.Shared(bytes)
+    response.content = buf
+    response.contentLength = buf.length
 
     end(request, response)
   }
 
   def textPlain(
     request: Request,
-    status: HttpResponseStatus,
+    status: Status,
     body: CharSequence = "",
     devbody: CharSequence = ""
   ): Future[Response] =
@@ -69,7 +68,7 @@ trait CdmiRestServiceResponse { self: CdmiRestService with CdmiRestServiceTypes 
 
   def appJson(
     request: Request,
-    status: HttpResponseStatus,
+    status: Status,
     body: CharSequence = "",
     devbody: CharSequence = ""
   ): Future[Response] =

@@ -18,16 +18,13 @@
 package gr.grnet.cdmi.service
 
 import java.io.File
-import java.net.{InetSocketAddress, SocketAddress, URLDecoder}
+import java.net.{InetSocketAddress, URLDecoder}
 
 import com.twitter.app.GlobalFlag
-import com.twitter.conversions.storage.intToStorageUnitableWholeNumber
-import com.twitter.finagle.dispatch.SerialServerDispatcher
-import com.twitter.finagle.http.Status
-import com.twitter.finagle.netty3.{Netty3Listener, Netty3ListenerTLSConfig}
-import com.twitter.finagle.server.DefaultServer
+import com.twitter.finagle.Httpx
+import com.twitter.finagle.httpx.{Status, Version}
+import com.twitter.finagle.netty3.Netty3ListenerTLSConfig
 import com.twitter.finagle.ssl.Ssl
-import com.twitter.finagle.{Filter, Http, ServerCodecConfig, http}
 import com.twitter.logging.Logger
 import com.twitter.util.{Await, Future, FutureTransformer}
 import gr.grnet.cdmi.capability.SystemWideCapability
@@ -35,9 +32,7 @@ import gr.grnet.cdmi.http.{CdmiHeader, CdmiMediaType}
 import gr.grnet.cdmi.model.CapabilityModel
 import gr.grnet.common.http.{StdHeader, StdMediaType}
 import gr.grnet.common.text.{NormalizePath, PathToList}
-import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
-import org.jboss.netty.handler.codec.http.{DefaultHttpResponse, HttpRequest, HttpResponse, HttpVersion}
-import org.jboss.netty.util.CharsetUtil.UTF_8
+import org.jboss.netty.handler.codec.http.HttpVersion
 
 import scala.collection.immutable.Seq
 
@@ -187,10 +182,9 @@ trait CdmiRestService { self: CdmiRestServiceTypes
 
         override def rescue(t: Throwable): Future[Response] = {
           log.error(t, "Unexpected Error")
-          val response = new DefaultHttpResponse(httpVersion, Status.InternalServerError)
-          val body = ""
-          response.setContent(copiedBuffer(body, UTF_8))
-          Response(response).future
+          val response = Response(Version.Http11, Status.InternalServerError)
+          response.setContentString("")
+          response.future
         }
       }
 
@@ -217,25 +211,24 @@ trait CdmiRestService { self: CdmiRestServiceTypes
     final val CdmiHeaderCheck = new Filter {
       override def apply(request: Request, service: Service): Future[Response] = {
         def JustGoOn() = service(request)
-        val headers = request.headers()
-        val contentType = headers.get(HeaderNames.Content_Type)
-        val xCdmiSpecificationVersion = headers.get(HeaderNames.X_CDMI_Specification_Version)
+        val headers = request.headerMap
+        val xCdmiSpecificationVersionOpt = headers.get(HeaderNames.X_CDMI_Specification_Version)
 
-        xCdmiSpecificationVersion match {
-          case null ⇒
+        xCdmiSpecificationVersionOpt match {
+          case None ⇒
             JustGoOn()
 
-          case "" ⇒
+          case Some("") ⇒
             badRequest(
               request,
               StdErrorRef.BR002,
               s"Empty value for header '${HeaderNames.X_CDMI_Specification_Version}'"
             )
 
-          case v if supportedCdmiVersions(v) ⇒
+          case Some(v) if supportedCdmiVersions(v) ⇒
             JustGoOn()
 
-          case v ⇒ badRequest(
+          case Some(v) ⇒ badRequest(
             request,
             StdErrorRef.BR003,
             s"Unknown protocol version $v. Supported versions are: ${supportedCdmiVersions.mkString(",")}"
@@ -266,7 +259,7 @@ trait CdmiRestService { self: CdmiRestServiceTypes
     case request ⇒
       def NotAllowed() = notAllowed(request)
 
-      val headers = request.headers()
+      val headers = request.headerMap
       val method = request.method
       val uri = request.uri
       val decodedUri = try URLDecoder.decode(uri, "UTF-8") catch { case e: Exception ⇒ s"(${e.getMessage}) $uri"}
@@ -274,20 +267,24 @@ trait CdmiRestService { self: CdmiRestServiceTypes
       val normalizedPath = requestPath.normalizePath
 
       logBeginRequest(request)
-      log.debug(s"(original) ${method.getName} $uri")
+      log.debug(s"(original) $method $uri")
       if(decodedUri != uri) {
-        log.debug(s"(decoded)  ${method.getName} $decodedUri")
+        log.debug(s"(decoded)  $method $decodedUri")
       }
 
       val pathElements = normalizedPath.pathToList
       val lastIsSlash = normalizedPath(normalizedPath.length - 1) == '/'
       val pathElementsDebugStr = pathElements.map(s ⇒ "\"" + s + "\"").mkString(" ") + (if(lastIsSlash) " [/]" else "")
-      log.debug(s"(as list)  ${method.getName} $pathElementsDebugStr")
+      log.debug(s"(as list)  $method $pathElementsDebugStr")
 
       def logHeader(name: String, exact: Boolean = true): Unit = if(headers.contains(name) ) {
-        val value = headers.get(name)
-        if(exact) { log.debug(s"'$name: $value'") }
-        else      { log.debug(s"'$name: ${value.substring(0, value.length / 3)}${"*" * (2 * value.length / 3)}'") }
+        headers.get(name) match {
+          case None ⇒
+          case Some(value) ⇒
+            if(exact) { log.debug(s"'$name: $value'") }
+            else      { log.debug(s"'$name: ${value.substring(0, value.length / 3)}${"*" * (2 * value.length / 3)}'") }
+
+        }
       }
 
       logHeader(HeaderNames.X_CDMI_Specification_Version)
@@ -368,11 +365,6 @@ trait CdmiRestService { self: CdmiRestServiceTypes
       Filters.CdmiHeaderCheck
     )
 
-  val nettyToFinagle =
-    Filter.mk[HttpRequest, HttpResponse, Request, Response] { (req, service) =>
-      service(Request(req)) map { _.httpResponse }
-    }
-
   def haveSslCertPath =
     sslCertPath() match {
       case null ⇒ false
@@ -397,10 +389,7 @@ trait CdmiRestService { self: CdmiRestServiceTypes
       case (false, false) ⇒
         // No SSL. Just start an http server
         log.info("Starting HTTP server on " + port().getPort)
-        val server = Http.serve(
-          port(),
-          nettyToFinagle andThen service
-        )
+        val server = Httpx.serve(port(), service)
 
         Await.ready(server)
 
@@ -423,20 +412,12 @@ trait CdmiRestService { self: CdmiRestServiceTypes
           sys.exit(2)
         }
 
-        val codec = {
-          http.Http()
-            .maxRequestSize(maxRequestSize().megabytes)
-            .server(ServerCodecConfig("cdmi", new SocketAddress{}))
-            .pipelineFactory
-        }
-        val tlsConfig = Some(Netty3ListenerTLSConfig(() => Ssl.server(sslCertPath(), sslKeyPath(), null, null, null)))
-        object HttpsListener extends Netty3Listener[HttpResponse, HttpRequest]("https", codec, tlsConfig = tlsConfig)
-        object Https extends DefaultServer[HttpRequest, HttpResponse, HttpResponse, HttpRequest](
-          "https", HttpsListener, new SerialServerDispatcher(_, _)
-        )
-
         log.info("Starting HTTPS server on " + sslPort().getPort)
-        val server = Https.serve(sslPort(), nettyToFinagle andThen service)
+        val server = Httpx.server.
+          withTls(Netty3ListenerTLSConfig(() => Ssl.server(sslCertPath(), sslKeyPath(), null, null, null))).
+          serve(sslPort(), service)
+
+
         Await.ready(server)
     }
   }

@@ -18,10 +18,10 @@
 package gr.grnet.cdmi.service
 
 trait CdmiRestServiceTypes {
-  final type Request  = com.twitter.finagle.http.Request
-  final val  Request  = com.twitter.finagle.http.Request
-  final type Response = com.twitter.finagle.http.Response
-  final val  Response = com.twitter.finagle.http.Response
+  final type Request  = com.twitter.finagle.httpx.Request
+  final val  Request  = com.twitter.finagle.httpx.Request
+  final type Response = com.twitter.finagle.httpx.Response
+  final val  Response = com.twitter.finagle.httpx.Response
   final type Service  = com.twitter.finagle.Service[Request, Response]
   final type Filter   = com.twitter.finagle.Filter[Request, Response, Request, Response]
 }

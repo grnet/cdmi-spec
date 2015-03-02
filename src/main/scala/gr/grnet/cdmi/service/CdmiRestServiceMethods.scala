@@ -17,7 +17,7 @@
 
 package gr.grnet.cdmi.service
 
-import com.twitter.finagle.http.Status
+import com.twitter.finagle.httpx.Status
 import com.twitter.util.Future
 import gr.grnet.cdmi.http.CdmiMediaType
 import gr.grnet.common.json.Json
