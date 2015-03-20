@@ -47,10 +47,18 @@
 
   <!--Common project settings-->
   <properties>
-    <scala.version>2.11.4</scala.version>
-    <snfcommonj.version>0.3.0-SNAPSHOT</snfcommonj.version>
-    <jackson.version>2.4.3</jackson.version>
+    <scala.main.version>2.11</scala.main.version>
+    <scala.version>${scala.main.version}.4</scala.version>
+
+    <snfcommonj.version>0.4.0</snfcommonj.version>
+    <jackson.version>2.5.1</jackson.version>
+    <typedkey.version>0.9.0</typedkey.version>
+
     <finagle.version>6.24.1-MONOCACHE</finagle.version>
+    <twitter.util.version>6.23.0</twitter.util.version>
+
+    <junit.version>4.12</junit.version>
+
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>${project.build.sourceEncoding}</project.reporting.outputEncoding>
   </properties>
@@ -71,7 +79,7 @@
     <dependency>
       <groupId>com.ckkloverdos</groupId>
       <artifactId>typedkey</artifactId>
-      <version>0.8.0-SNAPSHOT</version>
+      <version>${typedkey.version}</version>
     </dependency>
 
     <dependency>
@@ -88,38 +96,38 @@
 
     <dependency>
       <groupId>com.fasterxml.jackson.module</groupId>
-      <artifactId>jackson-module-scala_2.11</artifactId>
+      <artifactId>jackson-module-scala_${scala.main.version}</artifactId>
       <version>${jackson.version}</version>
     </dependency>
 
     <dependency>
       <groupId>com.twitter</groupId>
-      <artifactId>finagle-core_2.11</artifactId>
+      <artifactId>finagle-core_${scala.main.version}</artifactId>
       <version>${finagle.version}</version>
     </dependency>
 
     <dependency>
       <groupId>com.twitter</groupId>
-      <artifactId>finagle-httpx_2.11</artifactId>
+      <artifactId>finagle-httpx_${scala.main.version}</artifactId>
       <version>${finagle.version}</version>
     </dependency>
 
     <dependency>
       <groupId>com.twitter</groupId>
       <artifactId>util-app_2.11</artifactId>
-      <version>6.23.0</version>
+      <version>${twitter.util.version}</version>
     </dependency>
 
     <dependency>
       <groupId>com.twitter</groupId>
       <artifactId>util-logging_2.11</artifactId>
-      <version>6.23.0</version>
+      <version>${twitter.util.version}</version>
     </dependency>
 
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>4.11</version>
+      <version>${junit.version}</version>
       <scope>test</scope>
     </dependency>
 
