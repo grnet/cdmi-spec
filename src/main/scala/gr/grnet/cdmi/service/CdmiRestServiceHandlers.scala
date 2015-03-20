@@ -31,6 +31,7 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
 
   def handleContainerCall(request: Request, containerPath: List[String]): Future[Response] = {
     def NotAllowed() = notAllowed(request)
+    
     val method = request.method
     val headers = request.headerMap
     val hSpecVersion = headers.get(HeaderNames.X_CDMI_Specification_Version).orNull
@@ -129,7 +130,11 @@ trait CdmiRestServiceHandlers { self: CdmiRestService
     def handleContainerNonCdmiCall(): Future[Response] =
       method match {
         case Get ⇒
-          NotAllowed()
+          badRequest(
+            request,
+            StdErrorRef.BR022,
+            s"Requested to read a container without setting ${HeaderNames.X_CDMI_Specification_Version}"
+          )
         case Put ⇒
           NotAllowed()
         case Post ⇒

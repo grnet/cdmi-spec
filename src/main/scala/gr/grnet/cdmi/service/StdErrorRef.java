@@ -41,4 +41,5 @@ public enum StdErrorRef implements IErrorRef {
     BR019,
     BR020,
     BR021,
+    BR022,
 }
