@@ -76,7 +76,7 @@ trait CdmiRestServiceResponse { self: CdmiRestService with CdmiRestServiceTypes 
 
 
   def internalServerError(request: Request, t: Throwable, ref: IErrorRef): Future[Response] = {
-    val errMsg = s"[$ref]"
+    val errMsg = s"[$ref] Internal Server Error"
     val devErrMsg = s"$errMsg $t"
     log.error(t, devErrMsg)
 
