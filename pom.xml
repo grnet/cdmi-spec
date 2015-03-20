@@ -23,7 +23,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>gr.grnet</groupId>
   <artifactId>cdmi-spec</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.0-SNAPSHOT</version>
 
   <!-- Project details-->
   <name>cdmi-spec</name>
@@ -44,6 +44,35 @@
       <email>loverdos@grnet.gr</email>
     </developer>
   </developers>
+
+  <licenses>
+    <license>
+      <name>GPLv3</name>
+      <url>http://www.gnu.org/licenses/gpl-3.0.txt</url>
+    </license>
+  </licenses>
+
+  <scm>
+    <url>https://github.com/grnet/cdmi-spec</url>
+    <connection>scm:git:https://github.com/grnet/cdmi-spec.git</connection>
+    <developerConnection>scm:git:git://github.com/grnet/cdmi-spec.git</developerConnection>
+  </scm>
+
+  <issueManagement>
+    <system>GitHub</system>
+    <url>https://github.com/grnet/cdmi-spec/issues</url>
+  </issueManagement>
+
+  <distributionManagement>
+    <snapshotRepository>
+      <id>sonatype-nexus-snapshots</id>
+      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+    </snapshotRepository>
+    <repository>
+      <id>sonatype-nexus-staging</id>
+      <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+    </repository>
+  </distributionManagement>
 
   <!--Common project settings-->
   <properties>
@@ -168,8 +197,20 @@
         </configuration>
         <executions>
           <execution>
+            <id>scala-compile-first</id>
+            <phase>process-resources</phase>
             <goals>
+              <goal>add-source</goal>
               <goal>compile</goal>
+              <goal>doc-jar</goal>
+            </goals>
+          </execution>
+
+          <execution>
+            <id>scala-test-compile</id>
+            <phase>process-test-resources</phase>
+            <goals>
+              <!--<goal>add-source</goal>-->
               <goal>testCompile</goal>
             </goals>
           </execution>
@@ -209,6 +250,36 @@
         <version>2.3.2</version>
         <configuration>
           <preparationGoals>clean verify</preparationGoals>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-gpg-plugin</artifactId>
+        <version>1.5</version>
+        <configuration>
+          <useAgent>true</useAgent>
+        </configuration>
+        <executions>
+          <execution>
+            <id>sign-artifacts</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>sign</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.sonatype.plugins</groupId>
+        <artifactId>nexus-staging-maven-plugin</artifactId>
+        <version>1.6.3</version>
+        <extensions>true</extensions>
+        <configuration>
+          <serverId>sonatype-nexus-staging</serverId>
+          <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+          <autoReleaseAfterClose>true</autoReleaseAfterClose>
         </configuration>
       </plugin>
     </plugins>
