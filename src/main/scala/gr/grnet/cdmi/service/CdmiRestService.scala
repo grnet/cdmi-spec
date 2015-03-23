@@ -18,6 +18,7 @@
 package gr.grnet.cdmi.service
 
 import java.io.File
+import java.lang.StringBuilder
 import java.net.{InetSocketAddress, URLDecoder}
 
 import com.twitter.app.GlobalFlag
@@ -255,6 +256,8 @@ trait CdmiRestService { self: CdmiRestServiceTypes
     log.info(s"### END ${request.remoteSocketAddress} ${request.method} ${request.uri} ###")
   }
 
+  def headersToLog = List(HeaderNames.X_CDMI_Specification_Version, HeaderNames.Content_Type, HeaderNames.Accept)
+
   def routingTable: PartialFunction[Request, Future[Response]] = {
     case request ⇒
       def NotAllowed() = notAllowed(request)
@@ -277,19 +280,21 @@ trait CdmiRestService { self: CdmiRestServiceTypes
       val pathElementsDebugStr = pathElements.map(s ⇒ "\"" + s + "\"").mkString(" ") + (if(lastIsSlash) " [/]" else "")
       log.debug(s"(as list)  $method $pathElementsDebugStr")
 
-      def logHeader(name: String, exact: Boolean = true): Unit = if(headers.contains(name) ) {
-        headers.get(name) match {
-          case None ⇒
-          case Some(value) ⇒
-            if(exact) { log.debug(s"'$name: $value'") }
-            else      { log.debug(s"'$name: ${value.substring(0, value.length / 3)}${"*" * (2 * value.length / 3)}'") }
-
+      log.ifDebug({
+        val sb = new StringBuilder()
+        for {
+          name ← headersToLog
+          values = headers.getAll(name)
+          value ← values
+        } {
+          if(sb.length() > 0) {
+            sb.append(", ")
+          }
+          sb.append(s"'$name: $value'")
         }
-      }
 
-      logHeader(HeaderNames.X_CDMI_Specification_Version)
-      logHeader(HeaderNames.Content_Type)
-      logHeader(HeaderNames.Accept)
+        sb.toString
+      })
 
       val HAVE_SLASH = true
       val HAVE_NO_SLASH = false
