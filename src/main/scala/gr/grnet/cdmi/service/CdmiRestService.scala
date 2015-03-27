@@ -90,7 +90,7 @@ trait CdmiRestService { self: CdmiRestServiceTypes
   )
 
   def end(request: Request, response: Response): Response = {
-    logEndRequest(request)
+    logEndRequest(request, response)
     response
   }
 
@@ -252,8 +252,8 @@ trait CdmiRestService { self: CdmiRestServiceTypes
     log.info(s"### BEGIN ${request.remoteSocketAddress} ${request.method} ${request.uri} ###")
   }
 
-  def logEndRequest(request: Request): Unit = {
-    log.info(s"### END ${request.remoteSocketAddress} ${request.method} ${request.uri} ###")
+  def logEndRequest(request: Request, response: Response): Unit = {
+    log.info(s"### END ${request.remoteSocketAddress} ${response.status.code} ${request.method} ${request.uri} ###")
   }
 
   def headersToLog = List(HeaderNames.X_CDMI_Specification_Version, HeaderNames.Content_Type, HeaderNames.Accept)
