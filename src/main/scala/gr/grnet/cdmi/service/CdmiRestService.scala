@@ -89,12 +89,6 @@ trait CdmiRestService { self: CdmiRestServiceTypes
     sslKeyPath
   )
 
-  def end(request: Request, response: Response): Response = {
-    logEndRequest(request, response)
-    response
-  }
-
-
   object MediaTypes {
     final val Text_Plain = StdMediaType.Text_Plain.value()
     final val Text_Html = StdMediaType.Text_Html.value()
@@ -176,6 +170,22 @@ trait CdmiRestService { self: CdmiRestServiceTypes
   }
 
   object Filters {
+    final val LogBeginRequestFilter = new Filter {
+      def apply(request: Request, service: Service): Future[Response] = {
+        logBeginRequest(request)
+        service(request)
+      }
+    }
+
+    final val LogEndRequestFilter = new Filter {
+      def apply(request: Request, service: Service): Future[Response] = {
+        for(response ← service(request)) yield {
+          logEndRequest(request, response)
+          response
+        }
+      }
+    }
+
     final val RogueExceptionHandler = new Filter {
       val ft = new FutureTransformer[Response, Response] {
 
@@ -250,6 +260,22 @@ trait CdmiRestService { self: CdmiRestServiceTypes
 
   def logBeginRequest(request: Request): Unit = {
     log.info(s"### BEGIN ${request.remoteSocketAddress} ${request.method} ${request.uri} ###")
+    val headers = request.headerMap
+    log.ifDebug({
+      val sb = new StringBuilder()
+      for {
+        name ← headersToLog
+        values = headers.getAll(name)
+        value ← values
+      } {
+        if(sb.length() > 0) {
+          sb.append(", ")
+        }
+        sb.append(s"'$name: $value'")
+      }
+
+      sb.toString
+    })
   }
 
   def logEndRequest(request: Request, response: Response): Unit = {
@@ -262,14 +288,12 @@ trait CdmiRestService { self: CdmiRestServiceTypes
     case request ⇒
       def NotAllowed() = notAllowed(request)
 
-      val headers = request.headerMap
       val method = request.method
       val uri = request.uri
       val decodedUri = try URLDecoder.decode(uri, "UTF-8") catch { case e: Exception ⇒ s"(${e.getMessage}) $uri"}
       val requestPath = request.path
       val normalizedPath = requestPath.normalizePath
 
-      logBeginRequest(request)
       log.debug(s"(original) $method $uri")
       if(decodedUri != uri) {
         log.debug(s"(decoded)  $method $decodedUri")
@@ -279,22 +303,6 @@ trait CdmiRestService { self: CdmiRestServiceTypes
       val lastIsSlash = normalizedPath(normalizedPath.length - 1) == '/'
       val pathElementsDebugStr = pathElements.map(s ⇒ "\"" + s + "\"").mkString(" ") + (if(lastIsSlash) " [/]" else "")
       log.debug(s"(as list)  $method $pathElementsDebugStr")
-
-      log.ifDebug({
-        val sb = new StringBuilder()
-        for {
-          name ← headersToLog
-          values = headers.getAll(name)
-          value ← values
-        } {
-          if(sb.length() > 0) {
-            sb.append(", ")
-          }
-          sb.append(s"'$name: $value'")
-        }
-
-        sb.toString
-      })
 
       val HAVE_SLASH = true
       val HAVE_NO_SLASH = false
@@ -345,7 +353,7 @@ trait CdmiRestService { self: CdmiRestServiceTypes
           handleObjectOrQueueCall(request, pathList)
 
         case _ ⇒
-          log.debug("CATCHALL")
+          log.warning("CATCHALL")
           NotAllowed()
       }
   }
@@ -388,7 +396,8 @@ trait CdmiRestService { self: CdmiRestServiceTypes
     printBanner()
     logFlags()
 
-    val service = (mainFilters :\ mainService) { (filter, service) ⇒ filter andThen service }
+    val fullFilters = Vector(Filters.LogBeginRequestFilter) ++ mainFilters ++ Vector(Filters.LogEndRequestFilter)
+    val service = (fullFilters :\ mainService) { (filter, service) ⇒ filter andThen service }
 
     (haveSslCertPath, haveSslKeyPath) match {
       case (false, false) ⇒

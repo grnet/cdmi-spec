@@ -34,12 +34,8 @@ trait CdmiRestServiceResponse { self: CdmiRestService with CdmiRestServiceTypes 
     devbody: CharSequence = ""
   ): Response = {
 
-    val statusCode = status.code
     if(dev() && devbody.length() > 0) {
       log.info(devbody.toString)
-    }
-    if(statusCode < 200 || statusCode >= 300) {
-      log.error(s"$status $body")
     }
     else {
       log.info(s"$status, '${HeaderNames.Content_Type}: ${contentType.value()}', '${HeaderNames.Content_Length}: ${body.length()}'")
@@ -55,7 +51,7 @@ trait CdmiRestServiceResponse { self: CdmiRestService with CdmiRestServiceTypes 
     response.content = buf
     response.contentLength = buf.length
 
-    end(request, response)
+    response
   }
 
   def textPlain(
