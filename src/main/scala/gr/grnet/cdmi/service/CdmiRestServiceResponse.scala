@@ -51,7 +51,7 @@ trait CdmiRestServiceResponse { self: CdmiRestService with CdmiRestServiceTypes 
     response.contentType = contentType.value()
 
     val bytes = body.toString.getBytes(StandardCharsets.UTF_8)
-    val buf = Buf.ByteArray.Shared(bytes)
+    val buf = Buf.ByteArray.Owned(bytes)
     response.content = buf
     response.contentLength = buf.length
 
