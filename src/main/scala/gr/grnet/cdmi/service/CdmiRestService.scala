@@ -279,7 +279,12 @@ trait CdmiRestService { self: CdmiRestServiceTypes
   }
 
   def logEndRequest(request: Request, response: Response): Unit = {
-    log.info(s"### END ${request.remoteSocketAddress} ${response.status.code} ${request.method} ${request.uri} ###")
+    val contentLength = response.contentLength.getOrElse(-1)
+    val contentType   = response.contentType.map(ct ⇒ s"'$ct'").getOrElse("''")
+    val code = response.status.code
+    val method = request.method
+    val uri = request.uri
+    log.info(s"### END ${request.remoteSocketAddress} $code $contentLength $contentType $method ${uri} ###")
   }
 
   def headersToLog = List(HeaderNames.X_CDMI_Specification_Version, HeaderNames.Content_Type, HeaderNames.Accept)
