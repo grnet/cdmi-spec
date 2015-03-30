@@ -420,14 +420,18 @@ trait CdmiRestService { self: CdmiRestServiceTypes
         val certFile = new File(sslCertPath())
         val certFileOK = certFile.isFile && certFile.canRead
         if(!certFileOK) {
-          System.err.println("SSL certificate not found")
+          val msg = "ERROR: SSL certificate not found; exiting"
+          System.err.println(msg)
+          log.error(msg)
           sys.exit(1)
         }
 
         val keyFile = new File(sslKeyPath())
         val keyFileOK = keyFile.isFile && keyFile.canRead
         if(!keyFileOK) {
-          System.err.println("SSL key not found")
+          val msg = "ERROR: SSL key not found; exiting"
+          System.err.println(msg)
+          log.error(msg)
           sys.exit(2)
         }
 
