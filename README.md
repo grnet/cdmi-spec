@@ -1,7 +1,7 @@
 cdmi-spec
 =========
 
-`CDMI v1.0.2` (which is an ISO Standard) Skeleton Server.
+`CDMI` `v1.0.2` (which is an ISO Standard) and `v1.1` Skeleton Server.
 
 You can plug-in your own storage backend solution.
 
