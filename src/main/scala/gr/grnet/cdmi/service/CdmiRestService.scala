@@ -72,12 +72,23 @@ trait CdmiRestService { self: CdmiRestServiceTypes
 
   val httpVersion: HttpVersion = HttpVersion.HTTP_1_1
 
-  def supportedCdmiVersions: Set[String] = Set("1.0.2")
+  object CdmiVersions {
+    final val V_1_0_2 = "1.0.2"
+    final val V_1_1   = "1.1"
+  }
+
+  /**
+   * Supported versions in increasing order, so that the latest version is the last element.
+   */
+  def supportedCdmiVersionsSeq: Seq[String] = Seq(CdmiVersions.V_1_0_2, CdmiVersions.V_1_1)
+
+  def supportedCdmiVersions: Set[String] = supportedCdmiVersionsSeq.toSet
 
   /**
    * The CDMI version we report back to an HTTP response.
+   * The default is to report the latest, using the last element from `supportedCdmiVersionsSeq`.
    */
-  def currentCdmiVersion: String = "1.0.2"
+  def currentCdmiVersion: String = supportedCdmiVersionsSeq.last
 
   def flags: Seq[GlobalFlag[_]] = Seq(
     port,
